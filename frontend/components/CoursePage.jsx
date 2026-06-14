@@ -1,0 +1,339 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import {
+  CheckCircle, Circle, Clock, Play, GraduationCap, ChevronRight, ArrowLeft, Users, Tag, BookOpen
+} from 'lucide-react';
+import { T } from '@/lib/lms-data';
+import { getCourses, getCourseSyllabus } from '@/lib/frappe';
+import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
+
+export default function CoursePage() {
+  const isMobile = useMediaQuery(isMobileMQ);
+  const rPad = isMobile ? 16 : 36;
+
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [courseDetails, setCourseDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [completed, setCompleted] = useState({});
+
+  // Fetch courses and load completion progress
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const list = await getCourses();
+        // Students only see Published courses
+        const published = list.filter(c => c.status === 'Published');
+        setCourses(published);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+
+    const savedCompleted = localStorage.getItem('completed_lessons');
+    if (savedCompleted) {
+      try {
+        setCompleted(JSON.parse(savedCompleted));
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleSelectCourse = async (course) => {
+    setSelectedCourse(course);
+    setDetailsLoading(true);
+    try {
+      const details = await getCourseSyllabus(course.id);
+      setCourseDetails(details);
+    } catch (e) {
+      console.error("Failed to load course details", e);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', background: '#07080F', alignItems: 'center', justifyContent: 'center', color: '#DDE3F2' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(91, 140, 248, 0.2)', borderTopColor: '#5B8CF8', animation: 'spin 1s linear infinite' }} />
+          <div style={{ fontSize: 14, color: '#647298' }}>Loading courses...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (detailsLoading) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', background: '#07080F', alignItems: 'center', justifyContent: 'center', color: '#DDE3F2' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(91, 140, 248, 0.2)', borderTopColor: '#5B8CF8', animation: 'spin 1s linear infinite' }} />
+          <div style={{ fontSize: 14, color: '#647298' }}>Loading course syllabus...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render course outline if a specific course is selected
+  if (selectedCourse && courseDetails) {
+    const details = courseDetails;
+    const modules = details.modules || [];
+    
+    // Compile all lessons in this course
+    const courseLessons = modules.flatMap(m => m.lessons.map(l => ({ ...l, module: m })));
+    const total = courseLessons.length;
+    const done = courseLessons.filter(l => completed[l.id]).length;
+    const progressPercent = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    return (
+      <div style={{ padding: isMobile ? '20px 16px' : '32px 36px', maxWidth: 860, fontFamily: 'var(--font-outfit), sans-serif' }}>
+        
+        {/* Back button */}
+        <button
+          onClick={() => setSelectedCourse(null)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'none',
+            border: 'none',
+            color: T.muted,
+            cursor: 'pointer',
+            fontSize: 13,
+            marginBottom: 20,
+            padding: 0,
+            transition: 'color 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = T.text}
+          onMouseLeave={(e) => e.currentTarget.style.color = T.muted}
+        >
+          <ArrowLeft size={15} /> Back to Courses
+        </button>
+
+        {/* Course Detail Header */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, color: T.accent, background: `${T.accent}15`, padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>
+              {selectedCourse.category}
+            </span>
+            <span style={{ fontSize: 11.5, color: T.muted }}>
+              By {selectedCourse.instructor}
+            </span>
+          </div>
+          
+          <h2 style={{ color: T.text, fontSize: 24, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.03em' }}>
+            {details.title}
+          </h2>
+          
+          <p style={{ color: T.muted, margin: 0, fontSize: 14, lineHeight: 1.5 }}>
+            {details.tagline}
+          </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, fontSize: 12.5, color: T.muted }}>
+            <span>Progress: {done}/{total} lessons completed</span>
+            <span style={{ fontWeight: 600, color: T.accent }}>{progressPercent}% Complete</span>
+          </div>
+
+          <div style={{ background: T.s3, borderRadius: 99, height: 6, marginTop: 8, width: '100%', overflow: 'hidden' }}>
+            <div style={{
+              background: T.accent, height: '100%', borderRadius: 99,
+              width: `${progressPercent}%`, transition: 'width 0.4s'
+            }} />
+          </div>
+        </div>
+
+        {/* Modules list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {modules.map((mod, mi) => {
+            const modDone = mod.lessons.filter(l => completed[l.id]).length;
+            return (
+              <div key={mod.id} style={{ background: T.s1, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}>
+                {/* Module header */}
+                <div style={{
+                  padding: '16px 20px', borderBottom: `1px solid ${T.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 9,
+                      background: `${mod.accent || T.accent}18`, border: `1px solid ${mod.accent || T.accent}30`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18
+                    }}>{mod.emoji}</div>
+                    <div>
+                      <div style={{ color: T.text, fontWeight: 600, fontSize: 14 }}>{mi + 1}. {mod.title}</div>
+                      <div style={{ color: T.muted, fontSize: 12 }}>{mod.lessons.length} lessons · {modDone} completed</div>
+                    </div>
+                  </div>
+                  {/* Circular progress */}
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="36" height="36" style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
+                      <circle cx="18" cy="18" r="14" fill="none" stroke={T.s3} strokeWidth="3" />
+                      <circle cx="18" cy="18" r="14" fill="none" stroke={mod.accent || T.accent} strokeWidth="3"
+                        strokeDasharray={`${2 * Math.PI * 14}`}
+                        strokeDashoffset={`${2 * Math.PI * 14 * (1 - (mod.lessons.length > 0 ? modDone / mod.lessons.length : 0))}`}
+                        strokeLinecap="round" />
+                    </svg>
+                    <span style={{ fontSize: 10, color: mod.accent || T.accent, fontWeight: 700, position: 'relative' }}>
+                      {mod.lessons.length > 0 ? Math.round((modDone / mod.lessons.length) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Lessons */}
+                <div>
+                  {mod.lessons.map((lesson, li) => (
+                    <a
+                      key={lesson.id}
+                      href={`/lesson/${lesson.id}`}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center',
+                        justifyContent: 'space-between', padding: '13px 20px',
+                        background: 'transparent', border: 'none',
+                        borderBottom: li < mod.lessons.length - 1 ? `1px solid ${T.border}` : 'none',
+                        cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s',
+                        textDecoration: 'none'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = T.s2}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {completed[lesson.id]
+                          ? <CheckCircle size={16} color={T.green} />
+                          : <Circle size={16} color={T.dim} />}
+                        <div>
+                          <div style={{ color: T.text, fontSize: 13.5, fontWeight: 500 }}>{lesson.title}</div>
+                          <div style={{ color: T.muted, fontSize: 12, marginTop: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Clock size={11} />{lesson.dur}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {completed[lesson.id] && (
+                          <span style={{ fontSize: 11, color: T.green, background: `${T.green}18`, padding: '2px 8px', borderRadius: 20 }}>Done</span>
+                        )}
+                        <Play size={14} color={T.muted} />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Render Courses Directory
+  return (
+    <div style={{ padding: isMobile ? '20px 16px' : '32px 36px', maxWidth: 1000, fontFamily: 'var(--font-outfit), sans-serif' }}>
+      
+      {/* Directory Title */}
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ color: T.text, fontSize: isMobile ? 22 : 28, fontWeight: 700, margin: 0, letterSpacing: '-0.04em' }}>
+          Explore Courses
+        </h1>
+        <p style={{ color: T.muted, marginTop: 6, fontSize: isMobile ? 14 : 15 }}>
+          Study structured paths curated by instructors, powered by Frappe LMS.
+        </p>
+      </div>
+
+      {courses.length === 0 ? (
+        <div style={{ background: T.s1, border: `1px solid ${T.border}`, borderRadius: 16, padding: '48px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🎓</div>
+          <h3 style={{ color: T.text, fontSize: 16, fontWeight: 600, margin: '0 0 6px 0' }}>No published courses</h3>
+          <p style={{ color: T.muted, fontSize: 13, maxWidth: 320, margin: '0 auto' }}>
+            There are no published courses right now. Go to the Admin dashboard to create and publish a course.
+          </p>
+        </div>
+      ) : (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: 20
+        }}>
+          {courses.map(course => {
+            const totalLessons = course.lessonsCount || 0;
+            return (
+              <div
+                key={course.id}
+                onClick={() => handleSelectCourse(course)}
+                style={{
+                  background: T.s1,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 14,
+                  padding: 20,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  minHeight: 200,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  transition: 'all 0.2s ease'
+                }}
+                className="course-card"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = T.accent;
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(91, 140, 248, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = T.border;
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                {/* Accent ambient lighting */}
+                <div style={{
+                  position: 'absolute', top: -50, right: -50, width: 100, height: 100,
+                  borderRadius: '50%', background: 'rgba(91, 140, 248, 0.05)', filter: 'blur(30px)', pointerEvents: 'none'
+                }} />
+
+                <div>
+                  {/* Category and Instructor */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontSize: 11, color: T.accent, background: `${T.accent}14`, padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>
+                      {course.category}
+                    </span>
+                    <span style={{ fontSize: 11, color: T.muted }}>
+                      By {course.instructor}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <h3 style={{ color: T.text, fontSize: 15.5, fontWeight: 700, margin: '0 0 6px 0', lineHeight: 1.4 }}>
+                    {course.title}
+                  </h3>
+
+                  {/* Tagline */}
+                  <p style={{ color: T.muted, fontSize: 12.5, lineHeight: 1.5, margin: '0 0 16px 0' }}>
+                    {course.tagline || ""}
+                  </p>
+                </div>
+
+                {/* Footer Details */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: `1px solid ${T.border}`, fontSize: 12, color: T.muted }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <BookOpen size={13} />
+                    <span>{totalLessons} lessons</span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: T.accent, fontWeight: 600 }}>
+                    <span>View Outline</span>
+                    <ChevronRight size={13} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

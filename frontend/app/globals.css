@@ -1,0 +1,29 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #07080F;
+}
+
+body, button, input, textarea, select {
+  font-family: var(--font-outfit), 'Segoe UI', sans-serif;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 15px 2px rgba(155, 110, 248, 0.2); }
+  50% { box-shadow: 0 0 30px 5px rgba(155, 110, 248, 0.4); }
+  100% { box-shadow: 0 0 15px 2px rgba(155, 110, 248, 0.2); }
+}
