@@ -1,6 +1,7 @@
 const path = require('path');
 const mysql = require(require.resolve('mysql2/promise', { paths: [path.join(__dirname, '..', 'frontend')] }));
 const fs = require('fs');
+require('dotenv').config({ path: path.join(__dirname, '..', 'frontend', '.env') });
 
 // Helper to parse a CSV line, respecting double quotes
 function parseCSVLine(line) {
@@ -61,10 +62,11 @@ async function run() {
   
   // Connect to the MariaDB server (without specifying DB name first)
   const connection = await mysql.createConnection({
-    host: '127.0.0.1',
-    port: 3306,
-    user: 'root',
-    password: '123',
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: parseInt(process.env.DB_PORT || '3306'),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '123',
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
   });
   
   try {
