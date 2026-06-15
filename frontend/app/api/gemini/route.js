@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cacheGet, cacheSet, makeCacheKey } from '@/lib/cache';
 import { getRotatedKey } from '@/lib/keys';
+import { loadHistory, saveHistory, recall, buildMemoryContext } from '@/lib/memory';
 
 function calculateWait(error, baseDelay, attempt) {
   if (error?.details) {
@@ -43,7 +44,7 @@ async function fetchWithRetry(url, options, retries = 5, baseDelay = 1000) {
 }
 
 export async function POST(request) {
-  const { system, user, maxOutputTokens } = await request.json();
+  const { system, user, maxOutputTokens, sessionId, userId } = await request.json();
   const activeKey = getRotatedKey();
 
   if (!activeKey) {
@@ -53,19 +54,37 @@ export async function POST(request) {
     return NextResponse.json({ error: 'User message is required.' }, { status: 400 });
   }
 
-  const cacheKey = makeCacheKey('generate', system, user, maxOutputTokens);
+  // Load memory context
+  console.warn(`[Gemini] sessionId=${sessionId} userId=${userId}`);
+  const [history, memories] = await Promise.all([
+    loadHistory(sessionId),
+    recall(userId),
+  ]);
+  const memoryCtx = buildMemoryContext(history, memories);
+  const fullSystem = system ? system + memoryCtx : memoryCtx;
+  console.warn(`[Gemini] history=${history?.length} memories=${memories?.length} ctxLen=${memoryCtx.length}`);
+
+  const cacheKey = makeCacheKey('generate', fullSystem, user, maxOutputTokens);
   const cached = cacheGet(cacheKey);
   if (cached) return NextResponse.json({ text: cached });
 
   try {
+    const historyContents = (history || []).map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content }],
+    }));
+
     const { response, data } = await fetchWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: user }] }],
-          ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+          contents: [
+            ...historyContents,
+            { role: 'user', parts: [{ text: user }] },
+          ],
+          ...(fullSystem ? { systemInstruction: { parts: [{ text: fullSystem }] } } : {}),
           generationConfig: { temperature: 0.4, maxOutputTokens: maxOutputTokens || 8192 },
         }),
       }
@@ -77,6 +96,17 @@ export async function POST(request) {
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (text) cacheSet(cacheKey, text);
+
+    // Save working memory asynchronously
+    if (sessionId && text) {
+      const updated = [
+        ...(history || []),
+        { role: 'user', content: user },
+        { role: 'assistant', content: text },
+      ];
+      saveHistory(sessionId, updated);
+    }
+
     return NextResponse.json({ text });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

@@ -7,7 +7,8 @@ import { getCourseDetails } from '@/lib/lms-data';
 import LessonPage from '@/components/LessonPage';
 
 export default function LessonRoute() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = decodeURIComponent(params.id);
   const router = useRouter();
   const [completed, setCompleted] = useState({});
   const [lesson, setLesson] = useState(null);
@@ -15,11 +16,23 @@ export default function LessonRoute() {
 
   // Sync completion states
   useEffect(() => {
-    const saved = localStorage.getItem('completed_lessons');
-    if (saved) {
-      try {
-        setCompleted(JSON.parse(saved));
-      } catch (e) {}
+    let key = 'completed_lessons';
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('frappe_user');
+      if (stored) {
+        try {
+          const user = JSON.parse(stored);
+          if (user && user.email) {
+            key = `completed_lessons_${user.email}`;
+          }
+        } catch (e) {}
+      }
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          setCompleted(JSON.parse(saved));
+        } catch (e) {}
+      }
     }
   }, []);
 
@@ -90,9 +103,21 @@ export default function LessonRoute() {
   }, [id]);
 
   const onComplete = (lessonId) => {
+    let key = 'completed_lessons';
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('frappe_user');
+      if (stored) {
+        try {
+          const user = JSON.parse(stored);
+          if (user && user.email) {
+            key = `completed_lessons_${user.email}`;
+          }
+        } catch (e) {}
+      }
+    }
     const updated = { ...completed, [lessonId]: true };
     setCompleted(updated);
-    localStorage.setItem('completed_lessons', JSON.stringify(updated));
+    localStorage.setItem(key, JSON.stringify(updated));
   };
 
   if (loading) {

@@ -47,6 +47,13 @@ export default function VoiceAgentView({ onClose, initialSession }) {
   const [sessions, setSessions] = useState(loadSessions);
   const [textSessions, setTextSessions] = useState([]);
 
+  const [userId] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    let id = localStorage.getItem('lms-user-id');
+    if (!id) { id = 'user-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); localStorage.setItem('lms-user-id', id); }
+    return id;
+  });
+
   // Load text sessions for unified sidebar
   useEffect(() => {
     try {
@@ -77,6 +84,7 @@ export default function VoiceAgentView({ onClose, initialSession }) {
   const audioSourcesQueueRef = useRef([]);
   const isMutedRef = useRef(false);
   const wsHadErrorRef = useRef(false);
+  const voiceSessionIdRef = useRef(null);
 
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
@@ -99,8 +107,9 @@ export default function VoiceAgentView({ onClose, initialSession }) {
 
   const saveCurrentSession = useCallback(() => {
     if (conversation.length === 0) return;
+    const sid = voiceSessionIdRef.current || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
     const session = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      id: sid,
       label: generateLabel(conversation, selectedSubject),
       subject: selectedSubject,
       language: selectedLanguage,
@@ -110,7 +119,18 @@ export default function VoiceAgentView({ onClose, initialSession }) {
     const updated = [session, ...sessions.filter((s) => s.id !== session.id)];
     setSessions(updated);
     saveSessions(updated);
-  }, [conversation, selectedSubject, selectedLanguage, sessions]);
+    // Persist to Redis memory asynchronously
+    fetch('/api/memory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save',
+        sessionId: sid,
+        userId,
+        messages: conversation.map(m => ({ role: m.sender === 'tutor' ? 'assistant' : 'user', content: m.text })),
+      }),
+    }).catch(() => {});
+  }, [conversation, selectedSubject, selectedLanguage, sessions, userId]);
 
   const terminateSession = useCallback((preserveMessage) => {
     if (wsRef.current) { try { wsRef.current.close(); } catch {} wsRef.current = null; }
@@ -186,7 +206,9 @@ export default function VoiceAgentView({ onClose, initialSession }) {
             ? `ws://localhost:5001`
             : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
         );
-        const wsUrl = `${wsHost}/api/ws?language=${selectedLanguage}&subject=${selectedSubject}`;
+        const voiceSid = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        voiceSessionIdRef.current = voiceSid;
+        const wsUrl = `${wsHost}/api/ws?language=${selectedLanguage}&subject=${selectedSubject}&sessionId=${voiceSid}&userId=${userId}`;
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 

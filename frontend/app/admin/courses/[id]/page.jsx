@@ -11,7 +11,8 @@ import { getCourses, getCourseSyllabus, saveCourseSyllabus } from '@/lib/frappe'
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 
 export default function CourseOutlinePage() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = decodeURIComponent(params.id);
   const router = useRouter();
   const isMobile = useMediaQuery(isMobileMQ);
 

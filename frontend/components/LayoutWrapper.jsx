@@ -23,19 +23,23 @@ export default function LayoutWrapper({ children }) {
       }
     }
 
-    const isAuthPage = pathname === '/login' || pathname.startsWith('/auth');
+    const isAuthPage = pathname === '/login' || pathname === '/users' || pathname === '/admin/login' || pathname.startsWith('/auth');
 
     if (!currentUser) {
       if (!isAuthPage) {
-        // Redirect to login if not logged in and trying to access a secure page
+        // Redirect to appropriate login page if not logged in
         setUser(null);
         setLoading(true);
-        router.replace('/login');
+        if (pathname.startsWith('/admin')) {
+          router.replace('/admin/login');
+        } else {
+          router.replace('/users');
+        }
         return;
       }
     } else {
       // User is logged in
-      if (isAuthPage) {
+      if (pathname === '/users' || pathname === '/admin/login' || pathname === '/login') {
         // Redirect logged-in users away from auth pages
         setLoading(true);
         if (currentUser.role === 'Administrator') {

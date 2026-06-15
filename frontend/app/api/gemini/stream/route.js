@@ -3,9 +3,10 @@ import { streamText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { cacheGet, cacheSet, makeCacheKey } from '@/lib/cache';
 import { getRotatedKey } from '@/lib/keys';
+import { loadHistory, saveHistory, recall, buildMemoryContext } from '@/lib/memory';
 
 export async function POST(request) {
-  const { system, user, maxOutputTokens } = await request.json();
+  const { system, user, maxOutputTokens, sessionId, userId } = await request.json();
   const apiKey = getRotatedKey();
 
   if (!apiKey) {
@@ -15,7 +16,17 @@ export async function POST(request) {
     return NextResponse.json({ error: 'User message is required.' }, { status: 400 });
   }
 
-  const cacheKey = makeCacheKey('stream', system, user, maxOutputTokens);
+  // Load memory context
+  console.warn(`[GeminiStream] sessionId=${sessionId} userId=${userId}`);
+  const [history, memories] = await Promise.all([
+    loadHistory(sessionId),
+    recall(userId),
+  ]);
+  const memoryCtx = buildMemoryContext(history, memories);
+  const fullSystem = system + memoryCtx;
+  console.warn(`[GeminiStream] history=${history?.length} memories=${memories?.length} ctxLen=${memoryCtx.length}`);
+
+  const cacheKey = makeCacheKey('stream', fullSystem, user, maxOutputTokens);
   const cached = cacheGet(cacheKey);
   if (cached) {
     const encoder = new TextEncoder();
@@ -34,14 +45,28 @@ export async function POST(request) {
     const provider = createGoogleGenerativeAI({ apiKey });
     const model = provider.languageModel('gemini-2.5-flash');
 
+    const fullMessages = [
+      ...(history || []).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
+      { role: 'user', content: user },
+    ];
+
     const result = streamText({
       model,
-      system,
-      prompt: user,
+      system: fullSystem,
+      messages: fullMessages,
       temperature: 0.4,
       maxTokens: maxOutputTokens || 8192,
       onFinish({ text }) {
         if (text) cacheSet(cacheKey, text);
+        // Save working memory asynchronously
+        if (sessionId) {
+          const updated = [
+            ...(history || []),
+            { role: 'user', content: user },
+            { role: 'assistant', content: text },
+          ];
+          saveHistory(sessionId, updated);
+        }
       },
     });
 

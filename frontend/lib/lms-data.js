@@ -83,11 +83,14 @@ export const ALL_LESSONS = COURSE.modules.flatMap(m =>
 );
 
 // ── Non-streaming API call ──
-export async function geminiCall(system, user, maxTokens = 8192) {
+export async function geminiCall(system, user, maxTokens = 8192, opts = {}) {
   const res = await fetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system, user, maxOutputTokens: maxTokens }),
+    body: JSON.stringify({
+      system, user, maxOutputTokens: maxTokens,
+      sessionId: opts.sessionId, userId: opts.userId,
+    }),
   });
   if (!res.ok) {
     let errMsg = `HTTP ${res.status}`;

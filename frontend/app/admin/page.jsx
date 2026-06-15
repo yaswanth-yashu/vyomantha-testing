@@ -2,59 +2,45 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Layers, GraduationCap, ChevronRight, Plus, HelpCircle, Settings, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Users, BarChart3, Plus, ArrowRight, Layers, ShieldCheck, FileText, CheckSquare } from 'lucide-react';
 import { T } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
+import { getCourses, getBatches, getNotifications, getCertificates } from '@/lib/frappe';
 
 export default function AdminHomePage() {
   const router = useRouter();
   const isMobile = useMediaQuery(isMobileMQ);
   
-  // Setup checklist state
-  const [checklist, setChecklist] = useState({
-    course: false,
-    chapter: false,
-    lesson: false,
-    quiz: false,
-    team: false,
-    batch: false,
-    batchStudent: false,
-    batchCourse: false
-  });
+  // Dashboard state
+  const [courseCount, setCourseCount] = useState(0);
+  const [batchCount, setBatchCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
+  const [certCount, setCertCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  // Load checklist state
   useEffect(() => {
-    const savedChecklist = localStorage.getItem('admin_getting_started');
-    if (savedChecklist) {
-      try {
-        setChecklist(JSON.parse(savedChecklist));
-      } catch (e) {}
-    }
+    Promise.all([
+      getCourses().catch(() => []),
+      getBatches().catch(() => []),
+      getNotifications().catch(() => []),
+      getCertificates().catch(() => [])
+    ]).then(([courses, batches, alerts, certs]) => {
+      setCourseCount(courses.length);
+      setBatchCount(batches.length);
+      setUnreadAlertCount(alerts.filter(a => !a.read).length);
+      setCertCount(certs.length);
+      setLoading(false);
+    });
   }, []);
 
-  // Sync checklist with sidebar
-  const handleChecklistChange = (key, val) => {
-    const updated = { ...checklist, [key]: val };
-    setChecklist(updated);
-    localStorage.setItem('admin_getting_started', JSON.stringify(updated));
-    window.dispatchEvent(new Event('admin_checklist_update'));
-  };
-
-  const checklistItems = [
-    { key: 'course', label: 'Create your first course', desc: 'Define your course outline, title, and target audience.' },
-    { key: 'chapter', label: 'Add your first chapter', desc: 'Group lessons together by module or topic chapters.' },
-    { key: 'lesson', label: 'Add your first lesson', desc: 'Upload markdown content or video explanations.' },
-    { key: 'quiz', label: 'Create your first quiz', desc: 'Add interactive multiple-choice questions.' },
-    { key: 'team', label: 'Invite your team and students', desc: 'Send invites to instructors, tutors, or learners.' },
-    { key: 'batch', label: 'Create your first batch', desc: 'Set up cohort structures for scheduling releases.' },
-    { key: 'batchStudent', label: 'Add students to your batch', desc: 'Enroll student groups to batch cohorts.' },
-    { key: 'batchCourse', label: 'Add courses to your batch', desc: 'Link modules and lessons to your batch syllabus.' }
-  ];
-
-  const completedCount = Object.values(checklist).filter(Boolean).length;
-  const progressPercent = Math.round((completedCount / checklistItems.length) * 100);
-
   const containerPadding = isMobile ? '70px 16px 32px 16px' : '40px';
+
+  const shortcuts = [
+    { title: 'Courses Curriculum', desc: 'Create, modify structure, and upload CSV syllabus.', count: courseCount, route: '/admin/courses', color: T.accent, Icon: BookOpen },
+    { title: 'Cohort Batches', desc: 'Manage batches, student groups, and lesson access.', count: batchCount, route: '/admin/batches', color: T.purple, Icon: Users },
+    { title: 'Certifications', desc: 'Review issued awards and completion criteria.', count: certCount, route: '/admin/certs', color: T.green, Icon: ShieldCheck },
+    { title: 'Analytics & Stats', desc: 'Check student registrations and completion rates.', count: null, route: '/admin/statistics', color: T.amber, Icon: BarChart3 }
+  ];
 
   return (
     <div style={{
@@ -66,10 +52,8 @@ export default function AdminHomePage() {
       {/* Header section */}
       <div style={{
         display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
         justifyContent: 'space-between',
-        alignItems: isMobile ? 'flex-start' : 'center',
-        gap: 16,
+        alignItems: 'center',
         marginBottom: 32
       }}>
         <div>
@@ -86,7 +70,7 @@ export default function AdminHomePage() {
             Hey, Administrator 👋
           </h1>
           <p style={{ color: T.muted, fontSize: isMobile ? 13.5 : 14.5, marginTop: 4, margin: 0 }}>
-            Manage your courses and batches at a glance
+            Manage your courses, cohort batches, and certifications in one place.
           </p>
         </div>
 
@@ -104,197 +88,128 @@ export default function AdminHomePage() {
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            boxShadow: '0 4px 12px rgba(155, 110, 248, 0.2)',
-            transition: 'opacity 0.2s'
+            boxShadow: '0 4px 12px rgba(155, 110, 248, 0.2)'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.opacity = 0.9}
-          onMouseLeave={(e) => e.currentTarget.style.opacity = 1}
         >
-          <Plus size={16} /> Create Course
+          <Plus size={16} /> New Course
         </button>
       </div>
 
-      {/* Main Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '3fr 2fr', gap: 28 }}>
-        
-        {/* Left Column: Course Empty State */}
-        <div style={{
-          background: T.s1,
-          border: `1px solid ${T.border}`,
-          borderRadius: 14,
-          padding: isMobile ? '40px 20px' : '64px 32px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          textAlign: 'center',
-          minHeight: 400
-        }}>
-          <div style={{
-            width: 80,
-            height: 80,
-            borderRadius: '50%',
-            background: `${T.purple}15`,
+      {/* Stats Summary Alert Banner */}
+      {unreadAlertCount > 0 && (
+        <div 
+          onClick={() => router.push('/admin/alerts')}
+          style={{
+            background: 'rgba(155, 110, 248, 0.05)',
+            border: `1px solid rgba(155, 110, 248, 0.15)`,
+            borderRadius: 12,
+            padding: '14px 18px',
+            marginBottom: 24,
+            cursor: 'pointer',
             display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 20,
-            border: `1px solid rgba(155, 110, 248, 0.2)`
-          }}>
-            <GraduationCap size={40} color={T.purple} />
+            transition: 'border-color 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.borderColor = T.purple}
+          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(155, 110, 248, 0.15)'}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: T.text }}>
+            <span style={{ display: 'flex', width: 8, height: 8, background: T.purple, borderRadius: '50%' }} />
+            <span>You have <strong>{unreadAlertCount}</strong> unread notifications and submissions waiting for review.</span>
           </div>
-          <h2 style={{ color: T.text, fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>No courses created</h2>
-          <p style={{ color: T.muted, fontSize: 13.5, maxWidth: 360, margin: '0 0 24px 0', lineHeight: 1.5 }}>
-            There are no courses currently. Create your first course to get started!
-          </p>
-          <button
-            onClick={() => router.push('/admin/courses')}
-            style={{
-              background: 'transparent',
-              border: `1px solid ${T.border}`,
-              color: T.text,
-              padding: '10px 20px',
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = T.s2}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-          >
-            <Plus size={15} color={T.purple} /> Create Course
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, color: T.purple, fontWeight: 600 }}>
+            Review Alerts <ArrowRight size={14} />
+          </div>
         </div>
+      )}
 
-        {/* Right Column: Interactive Checklist Progress */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          
-          {/* Progress Overview */}
-          <div style={{
-            background: T.s1,
-            border: `1px solid ${T.border}`,
-            borderRadius: 14,
-            padding: 24,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Getting started</span>
-              <span style={{ fontSize: 13, color: T.purple, fontWeight: 800 }}>{progressPercent}% Done</span>
-            </div>
-            
-            <div style={{ background: T.s3, height: 8, borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ width: `${progressPercent}%`, height: '100%', background: T.purple, transition: 'width 0.4s ease' }} />
-            </div>
-            
-            <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>
-              Complete the setup checklist to configure your LMS platform for instructors and students.
-            </p>
-          </div>
-
-          {/* Interactive Checklist list */}
-          <div style={{
-            background: T.s1,
-            border: `1px solid ${T.border}`,
-            borderRadius: 14,
-            padding: 20,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12
-          }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text, margin: '0 0 6px 0', borderBottom: `1px solid ${T.border}`, paddingBottom: 10 }}>
-              Platform Setup Checklist
-            </h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 360, overflowY: 'auto', paddingRight: 4 }}>
-              {checklistItems.map((item) => {
-                const done = checklist[item.key];
-                return (
-                  <div
-                    key={item.key}
-                    onClick={() => handleChecklistChange(item.key, !done)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 12,
-                      padding: 10,
-                      borderRadius: 8,
-                      background: done ? 'rgba(155, 110, 248, 0.02)' : 'transparent',
-                      border: `1px solid ${done ? 'rgba(155, 110, 248, 0.1)' : 'transparent'}`,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!done) e.currentTarget.style.background = T.s2;
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!done) e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <div style={{ marginTop: 2, display: 'flex', alignItems: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={done}
-                        readOnly
-                        style={{
-                          accentColor: T.purple,
-                          width: 15,
-                          height: 15,
-                          cursor: 'pointer'
-                        }}
-                      />
-                    </div>
-                    
-                    <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        color: done ? T.muted : T.text,
-                        textDecoration: done ? 'line-through' : 'none'
-                      }}>
-                        {item.label}
-                      </div>
-                      <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>
-                        {item.desc}
-                      </div>
-                    </div>
-
-                    {done && <CheckCircle2 size={14} color={T.purple} style={{ alignSelf: 'center' }} />}
-                  </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => {
-                const reset = {};
-                checklistItems.forEach(i => reset[i.key] = false);
-                setChecklist(reset);
-                localStorage.setItem('admin_getting_started', JSON.stringify(reset));
-                window.dispatchEvent(new Event('admin_checklist_update'));
-              }}
+      {/* Main Shortcut Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+        gap: 20,
+        marginBottom: 32
+      }}>
+        {shortcuts.map((sc) => {
+          const Icon = sc.Icon;
+          return (
+            <div
+              key={sc.title}
+              onClick={() => router.push(sc.route)}
               style={{
-                background: 'transparent',
-                border: 'none',
-                color: T.muted,
-                fontSize: 11,
+                background: T.s1,
+                border: `1px solid ${T.border}`,
+                borderRadius: 14,
+                padding: 24,
                 cursor: 'pointer',
-                textAlign: 'center',
-                marginTop: 6,
-                padding: '6px 0'
+                transition: 'all 0.2s',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = sc.color;
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = T.border;
+                e.currentTarget.style.transform = 'none';
               }}
             >
-              Reset Platform Checklist
-            </button>
-          </div>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', maxWidth: '75%' }}>
+                <div style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
+                  background: `${sc.color}15`,
+                  border: `1px solid ${sc.color}25`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <Icon size={20} color={sc.color} />
+                </div>
+                <div>
+                  <h3 style={{ color: T.text, fontSize: 15, fontWeight: 700, margin: 0 }}>
+                    {sc.title}
+                  </h3>
+                  <p style={{ color: T.muted, fontSize: 12.5, margin: '6px 0 0', lineHeight: 1.4 }}>
+                    {sc.desc}
+                  </p>
+                </div>
+              </div>
 
-        </div>
+              {sc.count !== null && (
+                <div style={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  color: sc.color,
+                  letterSpacing: '-0.03em',
+                  background: `${sc.color}08`,
+                  padding: '4px 10px',
+                  borderRadius: 8
+                }}>
+                  {loading ? '...' : sc.count}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
+      {/* Quick Info Board */}
+      <div style={{
+        background: T.s1,
+        border: `1px solid ${T.border}`,
+        borderRadius: 14,
+        padding: 20,
+        textAlign: 'center',
+        color: T.muted,
+        fontSize: 12.5
+      }}>
+        💡 Use the sidebar navigation on the left to jump between different panels like Quizzes, Assignments, and Jobs.
       </div>
     </div>
   );

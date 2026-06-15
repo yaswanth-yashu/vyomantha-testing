@@ -3,6 +3,7 @@ const express = require('express');
 const { WebSocketServer } = require('ws');
 const next = require('next');
 const { GoogleGenAI, Modality } = require('@google/genai');
+const { Redis } = require('@upstash/redis');
 require('dotenv').config();
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -18,6 +19,33 @@ function getGeminiClient() {
     aiClient = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
   }
   return aiClient;
+}
+
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+let redis = null;
+if (redisUrl && redisToken) {
+  redis = new Redis({ url: redisUrl, token: redisToken });
+}
+
+async function loadMemoryContext(sessionId, userId) {
+  if (!redis) return '';
+  try {
+    const [history, memories] = await Promise.all([
+      redis.get(`chat:${sessionId}`).then(d => Array.isArray(d) ? d : []).catch(() => []),
+      redis.get(`memories:${userId}`).then(d => Array.isArray(d) ? d : []).catch(() => []),
+    ]);
+    let ctx = '';
+    if (history.length > 0) {
+      ctx += '\n\nConversation history from this session:\n';
+      ctx += history.map(m => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content}`).join('\n');
+    }
+    if (memories.length > 0) {
+      ctx += '\n\nRelevant memories about this student (from past sessions):\n';
+      ctx += memories.map(f => `- ${f}`).join('\n');
+    }
+    return ctx;
+  } catch { return ''; }
 }
 
 function analyzeSentiment(text) {
@@ -85,6 +113,11 @@ nextApp.prepare().then(() => {
     else if (subject === 'science') systemInstruction += ' Currently helping with Science! Help explain concepts like gravity, photosynthesis, planets, or animals with fun, exciting facts.';
     else if (subject === 'languages') systemInstruction += ' Currently helping with Languages & Reading! Help expand vocabulary, teach correct grammar, or guide reading comprehensions with interesting sentences.';
     else systemInstruction += ' You are ready to tutor on any academic school subject: math, science, history, geography, languages, or reading.';
+
+    const sessionId = searchParams.get('sessionId');
+    const userId = searchParams.get('userId');
+    const memoryCtx = await loadMemoryContext(sessionId, userId);
+    if (memoryCtx) systemInstruction += memoryCtx;
 
     let geminiSession = null;
     try {

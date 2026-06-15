@@ -53,6 +53,13 @@ export default function GeneralTutor() {
   const textSessKey = 'general-tutor-sessions';
   const voiceSessKey = 'voice-tutor-sessions';
 
+  const [userId] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    let id = localStorage.getItem('lms-user-id');
+    if (!id) { id = 'user-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); localStorage.setItem('lms-user-id', id); }
+    return id;
+  });
+
   const isMobile = useMediaQuery(isMobileMQ);
   const rPad = isMobile ? 14 : 28;
   const rGap = isMobile ? 8 : 12;
@@ -117,11 +124,11 @@ export default function GeneralTutor() {
     setErr(''); setTopic('');
   }, []);
 
-  const saveSession = useCallback((msgs) => {
+  const saveSession = useCallback((msgs, overrideSid) => {
     if (!msgs.some(m => m.role === 'ai')) return;
     const lastUserMsg = [...msgs].reverse().find(m => m.role === 'user');
     const label = lastUserMsg ? lastUserMsg.content.slice(0, 40) : 'Untitled';
-    const sid = currentSessionId || Date.now().toString(36);
+    const sid = overrideSid || currentSessionId || Date.now().toString(36);
     const session = {
       id: sid, label, topic: label, mode, length,
       messages: msgs,
@@ -148,6 +155,9 @@ export default function GeneralTutor() {
     if (!raw) return;
     setTopic(''); setErr('');
 
+    const sid = currentSessionId || Date.now().toString(36);
+    if (!currentSessionId) setCurrentSessionId(sid);
+
     const intent = classifyIntent(raw);
     const userMsg = { id: Date.now().toString(36), role: 'user', content: raw, mode, length };
     const msgsWithUser = [...messages, userMsg];
@@ -155,14 +165,14 @@ export default function GeneralTutor() {
     if (intent.type === 'greeting') {
       const aiMsg = { id: (Date.now() + 1).toString(36), role: 'ai', content: getGreetingResponse(), local: true, features: {} };
       const next = [...msgsWithUser, aiMsg];
-      setMessages(next); saveSession(next);
+      setMessages(next); saveSession(next, sid);
       return;
     }
 
     if (intent.type === 'thanks') {
       const aiMsg = { id: (Date.now() + 1).toString(36), role: 'ai', content: getThanksResponse(), local: true, features: {} };
       const next = [...msgsWithUser, aiMsg];
-      setMessages(next); saveSession(next);
+      setMessages(next); saveSession(next, sid);
       return;
     }
 
@@ -170,7 +180,7 @@ export default function GeneralTutor() {
       const result = evaluateMath(intent.expression);
       const aiMsg = { id: (Date.now() + 1).toString(36), role: 'ai', content: `**${intent.expression}** = ${result}`, local: true, features: {} };
       const next = [...msgsWithUser, aiMsg];
-      setMessages(next); saveSession(next);
+      setMessages(next); saveSession(next, sid);
       return;
     }
 
@@ -181,7 +191,7 @@ export default function GeneralTutor() {
         const tokens = MAX_TOKENS[length.toLowerCase()] || 2000;
         const prompt = buildFeaturePrompt(intent.feature, intent.topic, mode);
         const system = FEATURE_SYSTEMS[intent.feature] || TUTOR_SYSTEM;
-        const text = await geminiCall(system, prompt, tokens);
+        const text = await geminiCall(system, prompt, tokens, { sessionId: sid, userId });
         if (!text.trim()) throw new Error('Gemini returned an empty response. Try rephrasing.');
         const features = {};
         if (intent.feature === 'quiz') features.quiz = { questions: parseQuizOutput(text), currentIdx: 0, currentAnswer: null };
@@ -192,7 +202,7 @@ export default function GeneralTutor() {
         const label = FEATURE_LABELS[intent.feature] || 'response';
         const aiMsg = { id: (Date.now() + 1).toString(36), role: 'ai', content: `Here's a ${label} on ${intent.topic}:`, features };
         const next = [...msgsWithUser, aiMsg];
-        setMessages(next); saveSession(next);
+        setMessages(next); saveSession(next, sid);
       } catch (e) {
         setErr(e.message || 'Error generating feature.');
       } finally {
@@ -211,7 +221,7 @@ export default function GeneralTutor() {
       const res = await fetch('/api/gemini/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ system: TUTOR_SYSTEM, user: prompt, maxOutputTokens: tokens }),
+        body: JSON.stringify({ system: TUTOR_SYSTEM, user: prompt, maxOutputTokens: tokens, sessionId: sid, userId }),
       });
       if (!res.ok) {
         let errMsg = `HTTP ${res.status}`;
@@ -236,7 +246,7 @@ export default function GeneralTutor() {
       const next = [...msgsWithUser, aiMsg];
       setMessages(next);
       setStreamingText('');
-      saveSession(next);
+      saveSession(next, sid);
     } catch (e) {
       setErr(e.message || 'Error generating response.');
       setStreamingText('');
@@ -255,7 +265,7 @@ export default function GeneralTutor() {
       const system = FEATURE_SYSTEMS[type] || TUTOR_SYSTEM;
       const prompt = buildFeaturePrompt(type, msg.content, mode);
       const tokens = type === 'simpler' || type === 'examples' ? 1000 : 1500;
-      const text = await geminiCall(system, prompt, tokens);
+      const text = await geminiCall(system, prompt, tokens, { sessionId: currentSessionId, userId });
       if (!text.trim()) throw new Error(`Gemini returned an empty response for ${type}. Try again.`);
 
       setMessages(prev => prev.map((m, i) => {

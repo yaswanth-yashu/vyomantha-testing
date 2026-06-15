@@ -5,11 +5,12 @@ import {
   BookOpen, Brain, CheckCircle, ChevronRight, GraduationCap, Flame
 } from 'lucide-react';
 import { T, getCourseDetails } from '@/lib/lms-data';
-import { getCourses } from '@/lib/frappe';
+import { getCourses, getStudentEnrollments } from '@/lib/frappe';
 import { useMediaQuery, isMobileMQ, isTabletMQ } from '@/lib/useMediaQuery';
 
 export default function Dashboard() {
   const [courses, setCourses] = useState([]);
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [completed, setCompleted] = useState({});
   const [loading, setLoading] = useState(true);
   const isMobile = useMediaQuery(isMobileMQ);
@@ -21,9 +22,28 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadDashboardData() {
       try {
-        const list = await getCourses();
+        let email = '';
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('frappe_user');
+          if (stored) {
+            try {
+              const user = JSON.parse(stored);
+              if (user && user.email) {
+                email = user.email;
+              }
+            } catch (e) {}
+          }
+        }
+
+        const [list, enrollments] = await Promise.all([
+          getCourses(),
+          email ? getStudentEnrollments(email) : Promise.resolve([])
+        ]);
         const published = list.filter(c => c.status === 'Published');
         setCourses(published);
+
+        const enrolled = published.filter(c => enrollments.includes(c.id));
+        setEnrolledCourses(enrolled);
       } catch (e) {
         console.error(e);
       } finally {
@@ -32,7 +52,19 @@ export default function Dashboard() {
     }
     loadDashboardData();
 
-    const savedCompleted = localStorage.getItem('completed_lessons');
+    let key = 'completed_lessons';
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('frappe_user');
+      if (stored) {
+        try {
+          const user = JSON.parse(stored);
+          if (user && user.email) {
+            key = `completed_lessons_${user.email}`;
+          }
+        } catch (e) {}
+      }
+    }
+    const savedCompleted = localStorage.getItem(key);
     if (savedCompleted) {
       try {
         setCompleted(JSON.parse(savedCompleted));
@@ -40,12 +72,12 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Compute stats dynamically
+  // Compute stats dynamically for enrolled courses
   let totalLessons = 0;
   let totalModules = 0;
   let completedCount = 0;
 
-  courses.forEach(course => {
+  enrolledCourses.forEach(course => {
     const details = getCourseDetails(course);
     if (details && details.modules) {
       totalModules += details.modules.length;
@@ -66,7 +98,7 @@ export default function Dashboard() {
 
   const stats = [
     { label: 'Lessons Completed', val: `${completedCount}/${totalLessons}`, sub: `${progressPercent}% done`, color: T.accent, Icon: CheckCircle },
-    { label: 'Courses Available', val: `${courses.length}`, sub: 'Headless Frappe Backend', color: T.green, Icon: BookOpen },
+    { label: 'Enrolled Courses', val: `${enrolledCourses.length}`, sub: 'Active cohort learning', color: T.green, Icon: BookOpen },
     { label: 'AI Tools Ready', val: '3', sub: 'General, Coding & Voice Tutor', color: T.purple, Icon: Brain },
   ];
 
@@ -123,28 +155,36 @@ export default function Dashboard() {
               <GraduationCap size={13} /> Active Syllabus
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>
-              {courses[0]?.title || 'No Courses Active'}
+              {enrolledCourses[0]?.title || 'No Courses Enrolled'}
             </div>
             <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>
-              {courses[0] ? `${getCourseDetails(courses[0])?.modules?.length || 0} modules · ${getCourseDetails(courses[0])?.modules?.flatMap(m => m.lessons).length || 0} lessons` : 'Create a course in administration to display progress.'}
+              {enrolledCourses[0] ? `${getCourseDetails(enrolledCourses[0])?.modules?.length || 0} modules · ${getCourseDetails(enrolledCourses[0])?.modules?.flatMap(m => m.lessons).length || 0} lessons` : 'Go to Explore Courses to enroll and start learning!'}
             </div>
           </div>
 
           <div>
-            {courses[0] && (
+            {enrolledCourses[0] && (
               <>
                 <div style={{ background: T.s3, borderRadius: 99, height: 6, marginBottom: 8, overflow: 'hidden' }}>
                   <div style={{ background: T.accent, height: 6, borderRadius: 99, width: `${progressPercent}%`, transition: 'width 0.5s' }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                   <span style={{ fontSize: 12, color: T.muted }}>{progressPercent}% complete</span>
-                  <a href="/courses" style={{ background: T.accent, color: '#000', border: 'none', padding: '7px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none' }}>
+                  <a 
+                    href="/courses" 
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && enrolledCourses[0]) {
+                        localStorage.setItem('selected_course_id', enrolledCourses[0].id);
+                      }
+                    }}
+                    style={{ background: T.accent, color: '#000', border: 'none', padding: '7px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none' }}
+                  >
                     Continue <ChevronRight size={13} />
                   </a>
                 </div>
               </>
             )}
-            {!courses[0] && (
+            {!enrolledCourses[0] && (
               <a href="/courses" style={{ background: T.accent, color: '#000', border: 'none', padding: '8px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, textDecoration: 'none' }}>
                 Go to Courses <ChevronRight size={13} />
               </a>

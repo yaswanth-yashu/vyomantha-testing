@@ -3,18 +3,22 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  BookOpen, Brain, Code2, BarChart3, Home, Zap, LogOut
+  BookOpen, Brain, Code2, BarChart3, Home, Zap, LogOut, Briefcase, Award, FileText, FolderOpen
 } from 'lucide-react';
 import { T } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 import MobileNav from './MobileNav';
 
 const NAV = [
-  { id: '/',              Icon: Home,      label: 'Dashboard'     },
-  { id: '/courses',       Icon: BookOpen,  label: 'Courses'       },
-  { id: '/general-tutor', Icon: Brain,     label: 'General Tutor' },
-  { id: '/coding-tutor',  Icon: Code2,     label: 'Coding Tutor'  },
-  { id: '/progress',      Icon: BarChart3, label: 'Progress'      },
+  { id: '/',              Icon: Home,          label: 'Dashboard'     },
+  { id: '/courses',       Icon: BookOpen,      label: 'Courses'       },
+  { id: '/quizzes',       Icon: Award,         label: 'Quizzes'       },
+  { id: '/assignments',   Icon: FileText,      label: 'Assignments'   },
+  { id: '/resources',     Icon: FolderOpen,    label: 'Resources'     },
+  { id: '/general-tutor', Icon: Brain,         label: 'General Tutor' },
+  { id: '/coding-tutor',  Icon: Code2,         label: 'Coding Tutor'  },
+  { id: '/jobs',          Icon: Briefcase,     label: 'Jobs'          },
+  { id: '/progress',      Icon: BarChart3,     label: 'Progress'      },
 ];
 
 export default function Sidebar() {
@@ -22,6 +26,24 @@ export default function Sidebar() {
   const router   = useRouter();
   const isMobile = useMediaQuery(isMobileMQ);
   const isGeneralTutor = pathname.startsWith('/general-tutor');
+
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('frappe_user');
+      if (stored) {
+        try {
+          setUser(JSON.parse(stored));
+        } catch (e) {}
+      }
+    }
+  }, []);
+
+  const getInitials = (name) => {
+    if (!name) return 'S';
+    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
 
   // Inject padding so content clears the fixed MobileNav top bar
   useEffect(() => {
@@ -56,7 +78,7 @@ export default function Sidebar() {
             Icon: LogOut,
             onClick: () => {
               localStorage.removeItem('frappe_user');
-              window.location.href = '/login';
+              window.location.href = '/users';
             }
           }
         ]}
@@ -103,16 +125,18 @@ export default function Sidebar() {
       <div style={{ padding: '14px 18px', borderTop: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: `${T.purple}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: T.purple, fontWeight: 700 }}>S</div>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: `${T.purple}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: T.purple, fontWeight: 700 }}>
+              {getInitials(user?.name)}
+            </div>
             <div>
-              <div style={{ color: T.text, fontSize: 13, fontWeight: 500 }}>Student</div>
+              <div style={{ color: T.text, fontSize: 13, fontWeight: 500 }}>{user?.name || 'Student'}</div>
               <div style={{ color: T.muted, fontSize: 11 }}>Free Plan</div>
             </div>
           </div>
           <button 
             onClick={() => {
               localStorage.removeItem('frappe_user');
-              window.location.href = '/login';
+              window.location.href = '/users';
             }}
             style={{
               background: 'transparent',
