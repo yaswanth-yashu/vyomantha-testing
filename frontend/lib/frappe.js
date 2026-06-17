@@ -1,6 +1,8 @@
 // lib/frappe.js
 
-const FRAPPE_URL = process.env.NEXT_PUBLIC_FRAPPE_URL || process.env.FRAPPE_URL;
+const FRAPPE_URL = typeof window !== 'undefined'
+  ? window.location.origin
+  : (process.env.FRAPPE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL || 'http://localhost:8080');
 
 export function sanitizeTitle(title) {
   if (!title) return title;
