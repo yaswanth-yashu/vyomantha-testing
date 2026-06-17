@@ -14,6 +14,38 @@ until redis-cli ping | grep -q PONG; do
 done
 echo "Local Redis is up and running."
 
+# Start the dummy web server on port 8000 in the background to satisfy Render's port scan immediately
+echo "Starting dummy server on port 8000..."
+python3 /home/frappe/dummy_server.py &
+DUMMY_PID=$!
+
+# Wait for the cloud MySQL/MariaDB database
+echo "Waiting for Cloud Database (${DB_HOST}:${DB_PORT})...."
+python3 -c "
+import socket
+import time
+import os
+import sys
+
+host = os.environ.get('DB_HOST')
+port = int(os.environ.get('DB_PORT', '3306'))
+
+if not host:
+    print('Error: DB_HOST environment variable is not defined.')
+    sys.exit(1)
+
+while True:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(2)
+            s.connect((host, port))
+            print('Cloud DB is reachable!')
+            break
+    except Exception as e:
+        print(f'Waiting for Cloud DB at {host}:{port}... Details: {e}')
+        time.sleep(3)
+"
+
 cd /home/frappe/frappe-bench
 
 # Add db_ssl_ca configuration to common_site_config.json so all connections use TLS
@@ -58,7 +90,48 @@ bench set-redis-cache-host redis://127.0.0.1:6379
 bench set-redis-queue-host redis://127.0.0.1:6379
 bench set-redis-socketio-host redis://127.0.0.1:6379
 
+# Check if the database has tables and is fully initialized (checks for LMS Course table from the lms app)
+echo "Checking database initialization state..."
+if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --ssl-ca=/etc/ssl/certs/ca-certificates.crt -e "USE $DB_NAME; SHOW TABLES;" 2>/dev/null | grep -qi "lms course"; then
+    echo "Database is incomplete or uninitialized. Executing bench new-site with --no-setup-db..."
+    
+    # Initialize site tables and default users in the pre-existing database
+    bench new-site lms.render \
+      --db-name "$DB_NAME" \
+      --db-user "$DB_USER" \
+      --db-password "$DB_PASSWORD" \
+      --db-host "$DB_HOST" \
+      --db-port "$DB_PORT" \
+      --admin-password "${ADMIN_PASSWORD:-admin}" \
+      --no-setup-db \
+      --force
+    
+    # Restore SSL and CORS configurations to site_config.json
+    bench --site lms.render set-config db_ssl_ca "/etc/ssl/certs/ca-certificates.crt"
+    bench --site lms.render set-config allow_cors "$FRONTEND_URL"
+
+    # Install payments and LMS apps
+    echo "Installing payments & lms applications..."
+    bench --site lms.render install-app payments
+    bench --site lms.render install-app lms
+else
+    echo "Database is already seeded. Connecting to existing database tables..."
+    bench --site lms.render set-config allow_cors "$FRONTEND_URL"
+    bench --site lms.render clear-cache
+fi
+
 bench use lms.render
+
+# Run database migrations (ensures schemas align with installed codebase)
+echo "Running database migrations..."
+bench --site lms.render migrate
+
+# Shutdown the dummy server to free port 8000
+echo "Stopping dummy server..."
+kill -9 $DUMMY_PID || true
+# Fallback to make sure port 8000 is free
+kill -9 $(lsof -t -i:8000) 2>/dev/null || true
+sleep 2
 
 # Update Procfile port mapping to Render's dynamic binding
 sed -i "s/bench serve.*/bench serve --port ${PORT:-8000}/g" ./Procfile

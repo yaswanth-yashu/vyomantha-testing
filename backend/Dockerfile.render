@@ -38,9 +38,9 @@ RUN bench build
 
 # Copy startup orchestration scripts as root
 USER root
-COPY --chown=frappe:frappe init-render-db.sh /home/frappe/init-render-db.sh
+COPY --chown=frappe:frappe dummy_server.py /home/frappe/dummy_server.py
 COPY --chown=frappe:frappe init-render-web.sh /home/frappe/init-render-web.sh
-RUN chmod +x /home/frappe/init-render-db.sh /home/frappe/init-render-web.sh
+RUN chmod +x /home/frappe/init-render-web.sh
 
 USER frappe
 WORKDIR /home/frappe
