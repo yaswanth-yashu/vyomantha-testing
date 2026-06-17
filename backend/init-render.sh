@@ -87,10 +87,14 @@ if [ ! -f "sites/lms.render/site_config.json" ]; then
 }
 EOF
     
-    # Check if the database has tables
+    # Check if the database has tables and is fully initialized
     echo "Checking database initialization state..."
-    if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --ssl-ca=/etc/ssl/certs/ca-certificates.crt -e "USE $DB_NAME; SHOW TABLES;" 2>/dev/null | grep -q "tab"; then
-        echo "Database is empty or uninitialized. Executing manual secure bench initialization..."
+    if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --ssl-ca=/etc/ssl/certs/ca-certificates.crt -e "USE $DB_NAME; SHOW TABLES;" 2>/dev/null | grep -q "tabPatch Log"; then
+        echo "Database is empty, uninitialized, or partially initialized. Executing manual secure bench initialization..."
+        
+        # Recreate database to ensure a clean slate
+        echo "Recreating database $DB_NAME..."
+        mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --ssl-ca=/etc/ssl/certs/ca-certificates.crt -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\`;"
         
         # Import the core framework tables from SQL dump over SSL
         echo "Importing core Frappe database schema..."
