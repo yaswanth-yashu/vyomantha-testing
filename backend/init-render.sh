@@ -90,10 +90,22 @@ EOF
     # Check if the database has tables and is fully initialized
     echo "Checking database initialization state..."
     if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --ssl-ca=/etc/ssl/certs/ca-certificates.crt -e "USE $DB_NAME; SHOW TABLES;" 2>/dev/null | grep -q "tabPatch Log"; then
-        echo "Database is empty, uninitialized, or partially initialized. Executing bench reinstall..."
+        echo "Database is empty, uninitialized, or partially initialized. Executing bench new-site with --no-setup-db..."
         
-        # Run bench reinstall to safely recreate tables and populate default metadata/users
-        bench --site lms.render reinstall --yes --mariadb-root-username "$DB_USER" --mariadb-root-password "$DB_PASSWORD" --admin-password "${ADMIN_PASSWORD:-admin}"
+        # Initialize site tables and default users in the pre-existing database
+        bench new-site lms.render \
+          --db-name "$DB_NAME" \
+          --db-user "$DB_USER" \
+          --db-password "$DB_PASSWORD" \
+          --db-host "$DB_HOST" \
+          --db-port "$DB_PORT" \
+          --admin-password "${ADMIN_PASSWORD:-admin}" \
+          --no-setup-db \
+          --force
+        
+        # Restore SSL and CORS configurations to site_config.json
+        bench --site lms.render set-config db_ssl_ca "/etc/ssl/certs/ca-certificates.crt"
+        bench --site lms.render set-config allow_cors "$FRONTEND_URL"
 
         # Install payments and LMS apps
         echo "Installing payments & lms applications..."
