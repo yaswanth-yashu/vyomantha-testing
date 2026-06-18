@@ -1,6 +1,72 @@
 import frappe
 from frappe.utils.password import update_password
 
+# Print existing courses to debug what is in the database
+try:
+    courses = frappe.get_all("LMS Course", fields=["name", "title", "published"])
+    print("DEBUG: EXISTING COURSES IN DB:", courses)
+except Exception as e:
+    print("DEBUG: Failed to fetch courses:", e)
+
+
+def grant_permission(doctype, role, read=1, write=0, create=0, delete=0):
+    try:
+        has_perm = frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": role})
+        if has_perm:
+            doc = frappe.get_doc("Custom DocPerm", has_perm)
+            doc.read = read
+            doc.write = write
+            doc.create = create
+            doc.delete = delete
+            doc.save(ignore_permissions=True)
+            print(f"Updated permissions for {doctype} -> {role}")
+        else:
+            doc = frappe.get_doc({
+                "doctype": "Custom DocPerm",
+                "parent": doctype,
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": role,
+                "permlevel": 0,
+                "read": read,
+                "write": write,
+                "create": create,
+                "delete": delete
+            })
+            doc.insert(ignore_permissions=True)
+            print(f"Created permissions for {doctype} -> {role}")
+        frappe.clear_cache(doctype=doctype)
+    except Exception as e:
+        print(f"Failed to grant permissions for {doctype} to {role}: {e}")
+
+# Grant permissions for LMS DocTypes
+permissions_to_grant = [
+    # LMS Course
+    ("LMS Course", "LMS Student", 1, 0, 0, 0),
+    ("LMS Course", "Guest", 1, 0, 0, 0),
+    
+    # Course Chapter
+    ("Course Chapter", "LMS Student", 1, 0, 0, 0),
+    ("Course Chapter", "Guest", 1, 0, 0, 0),
+    
+    # Course Lesson
+    ("Course Lesson", "LMS Student", 1, 0, 0, 0),
+    ("Course Lesson", "Guest", 1, 0, 0, 0),
+    
+    # LMS Course Category
+    ("LMS Course Category", "LMS Student", 1, 0, 0, 0),
+    ("LMS Course Category", "Guest", 1, 0, 0, 0),
+    
+    # LMS Enrollment
+    ("LMS Enrollment", "LMS Student", 1, 1, 1, 0),
+    ("LMS Enrollment", "Guest", 1, 1, 1, 0),
+]
+
+for dt, role, r, w, c, d in permissions_to_grant:
+    grant_permission(dt, role, r, w, c, d)
+
+
+
 students = [
     {"email": "student@lms.com", "name": "Student"},
     {"email": "student1@lms.com", "name": "Aarav Mehta"},
