@@ -34,7 +34,7 @@ export default function AdminSidebar() {
   
   const handleLogout = () => {
     localStorage.removeItem('frappe_user');
-    router.replace('/admin/login');
+    router.replace('/login');
   };
 
   const isActive = (navId) => {

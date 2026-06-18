@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Eye, EyeOff, Shield, GraduationCap, Lock, Mail } from 'lucide-react';
+import { Zap, Eye, EyeOff, Shield, GraduationCap, Lock, Mail, User } from 'lucide-react';
 import { T } from '@/lib/lms-data';
 import { login } from '@/lib/frappe';
 
@@ -39,12 +39,20 @@ export default function LoginPage() {
   };
 
 
-  const fillCredentials = (role) => {
+  const students = [
+    { email: 'student1@lms.com', name: 'Aarav Mehta', desc: '80% Progress (Committed learner)' },
+    { email: 'student2@lms.com', name: 'Sneha Patel', desc: '50% Progress (Half-way through)' },
+    { email: 'student3@lms.com', name: 'Rohan Sharma', desc: '90% Progress (High performer)' },
+    { email: 'student4@lms.com', name: 'Priya Nair', desc: '20% Progress (Just started)' },
+    { email: 'student5@lms.com', name: 'Aditya Rao', desc: '0% Progress (New enrollee)' }
+  ];
+
+  const fillCredentials = (role, stdEmail = '') => {
     if (role === 'admin') {
       setEmail('admin@lms.com');
       setPassword('admin123');
-    } else {
-      setEmail('student@lms.com');
+    } else if (role === 'student' && stdEmail) {
+      setEmail(stdEmail);
       setPassword('student123');
     }
     setError('');
@@ -274,56 +282,92 @@ export default function LoginPage() {
             <span>💡</span> Demo Credentials (click to fill)
           </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Admin trigger */}
             <button
+              type="button"
               onClick={() => fillCredentials('admin')}
               style={{
-                background: T.s2,
-                border: `1px solid rgba(155, 110, 248, 0.3)`,
+                background: email === 'admin@lms.com' ? 'rgba(155, 110, 248, 0.12)' : T.s2,
+                border: `1px solid ${email === 'admin@lms.com' ? T.purple : T.border}`,
                 borderRadius: 8,
-                padding: '10px 12px',
+                padding: '10px 14px',
                 cursor: 'pointer',
                 textAlign: 'left',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
                 transition: 'background 0.2s'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = T.s3}
-              onMouseLeave={(e) => e.currentTarget.style.background = T.s2}
+              onMouseEnter={(e) => { if (email !== 'admin@lms.com') e.currentTarget.style.background = T.s3; }}
+              onMouseLeave={(e) => { if (email !== 'admin@lms.com') e.currentTarget.style.background = T.s2; }}
             >
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.purple, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Shield size={10} /> Admin Workspace
-              </span>
-              <span style={{ fontSize: 10, color: T.muted, fontFamily: 'monospace' }}>admin@lms.com</span>
-              <span style={{ fontSize: 9, color: T.dim }}>password: admin123</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: 'rgba(155, 110, 248, 0.2)',
+                  color: T.purple,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <Shield size={14} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.purple }}>Admin Workspace</div>
+                  <div style={{ fontSize: 9.5, color: T.muted, fontFamily: 'monospace' }}>admin@lms.com</div>
+                </div>
+              </div>
+              <span style={{ fontSize: 9.5, color: T.dim }}>password: admin123</span>
             </button>
 
-            {/* Student trigger */}
-            <button
-              onClick={() => fillCredentials('student')}
-              style={{
-                background: T.s2,
-                border: `1px solid rgba(91, 140, 248, 0.3)`,
-                borderRadius: 8,
-                padding: '10px 12px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-                transition: 'background 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = T.s3}
-              onMouseLeave={(e) => e.currentTarget.style.background = T.s2}
-            >
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <GraduationCap size={10} /> Student Workspace
-              </span>
-              <span style={{ fontSize: 10, color: T.muted, fontFamily: 'monospace' }}>student@lms.com</span>
-              <span style={{ fontSize: 9, color: T.dim }}>password: student123</span>
-            </button>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>👥</span> Select Student Profile to Sign In
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {students.map((std) => (
+                <button
+                  key={std.email}
+                  type="button"
+                  onClick={() => fillCredentials('student', std.email)}
+                  style={{
+                    background: email === std.email ? `${T.accent}12` : T.s2,
+                    border: `1px solid ${email === std.email ? T.accent : T.border}`,
+                    borderRadius: 8,
+                    padding: '8px 12px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => { if (email !== std.email) e.currentTarget.style.background = T.s3; }}
+                  onMouseLeave={(e) => { if (email !== std.email) e.currentTarget.style.background = T.s2; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: '50%',
+                      background: `${T.accent}20`,
+                      color: T.accent,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <User size={13} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{std.name}</div>
+                      <div style={{ fontSize: 9.5, color: T.muted }}>{std.email}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: 9.5, color: T.accent, fontWeight: 600, background: `${T.accent}10`, padding: '2px 6px', borderRadius: 4 }}>
+                      {std.desc}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

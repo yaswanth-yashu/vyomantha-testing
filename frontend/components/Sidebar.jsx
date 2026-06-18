@@ -78,7 +78,7 @@ export default function Sidebar() {
             Icon: LogOut,
             onClick: () => {
               localStorage.removeItem('frappe_user');
-              window.location.href = '/users';
+              window.location.href = '/login';
             }
           }
         ]}
@@ -136,7 +136,7 @@ export default function Sidebar() {
           <button 
             onClick={() => {
               localStorage.removeItem('frappe_user');
-              window.location.href = '/users';
+              window.location.href = '/login';
             }}
             style={{
               background: 'transparent',

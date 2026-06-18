@@ -27,14 +27,10 @@ export default function LayoutWrapper({ children }) {
 
     if (!currentUser) {
       if (!isAuthPage) {
-        // Redirect to appropriate login page if not logged in
+        // Redirect to unified login page if not logged in
         setUser(null);
         setLoading(true);
-        if (pathname.startsWith('/admin')) {
-          router.replace('/admin/login');
-        } else {
-          router.replace('/users');
-        }
+        router.replace('/login');
         return;
       }
     } else {
@@ -103,7 +99,7 @@ export default function LayoutWrapper({ children }) {
     );
   }
 
-  const isAuthPage = pathname === '/login' || pathname.startsWith('/auth');
+  const isAuthPage = pathname === '/login' || pathname === '/users' || pathname === '/admin/login' || pathname.startsWith('/auth');
 
   // Auth pages (like /login) render directly without a sidebar
   if (isAuthPage || !user) {
