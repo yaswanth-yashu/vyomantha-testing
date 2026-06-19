@@ -127,7 +127,7 @@ try:
                 "redirect_url": "https://vyomanta.onrender.com/api/method/frappe.integrations.oauth2_logins.login_via_google",
                 "api_endpoint": "https://www.googleapis.com/oauth2/v2/userinfo",
                 "user_id_property": "email",
-                "custom_base_url": 0,
+                "custom_base_url": 1,
                 "auth_url_data": '{"scope": "openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email", "response_type": "code"}'
             })
             doc.insert(ignore_permissions=True)
@@ -136,12 +136,29 @@ try:
             doc = frappe.get_doc("Social Login Key", "google")
             doc.client_id = google_client_id
             doc.client_secret = google_client_secret
+            doc.custom_base_url = 1
+            doc.base_url = "https://accounts.google.com"
+            doc.authorize_url = "/o/oauth2/v2/auth"
+            doc.access_token_url = "/oauth2/v4/token"
+            doc.redirect_url = "https://vyomanta.onrender.com/api/method/frappe.integrations.oauth2_logins.login_via_google"
+            doc.api_endpoint = "https://www.googleapis.com/oauth2/v2/userinfo"
             doc.save(ignore_permissions=True)
             print("Google Social Login Key updated successfully via Frappe API.")
     else:
         print("Skipping Google Social Login Key seeding: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables not set.")
 except Exception as e:
     print(f"Failed to seed Google Social Login Key: {e}")
+
+# Diagnostics check at startup
+try:
+    print("DIAGNOSTICS: Calling get_google_auth_url...")
+    from lms.lms.api import get_google_auth_url
+    res = get_google_auth_url("http://localhost:3000/auth/callback")
+    print("DIAGNOSTICS SUCCESS:", res)
+except Exception as e:
+    import traceback
+    print("DIAGNOSTICS FAILED:", e)
+    traceback.print_exc()
 
 frappe.db.commit()
 print("Students bootstrap completed successfully!")
