@@ -64,7 +64,7 @@ fi
 # Apply environment configurations dynamically
 bench set-mariadb-host "$DB_HOST"
 bench set-config -g db_port "$DB_PORT"
-bench set-config -g allow_cors "$FRONTEND_URL"
+bench set-config -g allow_cors "*"
 bench set-config -g ignore_csrf 1
 
 # Ensure site config and logs directories exist
@@ -81,7 +81,7 @@ cat <<EOF > sites/lms.render/site_config.json
  "db_user": "$DB_USER",
  "db_ssl_ca": "/etc/ssl/certs/ca-certificates.crt",
  "encryption_key": "frappe-encryption-key-for-security",
- "allow_cors": "$FRONTEND_URL"
+ "allow_cors": "*"
 }
 EOF
 
@@ -117,7 +117,7 @@ if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --ssl-ca=/
     
     # Restore SSL and CORS configurations to site_config.json
     bench --site lms.render set-config db_ssl_ca "/etc/ssl/certs/ca-certificates.crt"
-    bench --site lms.render set-config allow_cors "$FRONTEND_URL"
+    bench --site lms.render set-config allow_cors "*"
 
     # Install payments and LMS apps
     echo "Installing payments & lms applications..."
@@ -125,7 +125,7 @@ if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --ssl-ca=/
     bench --site lms.render install-app lms
 else
     echo "Database is already seeded. Connecting to existing database tables..."
-    bench --site lms.render set-config allow_cors "$FRONTEND_URL"
+    bench --site lms.render set-config allow_cors "*"
     bench --site lms.render clear-cache
 fi
 

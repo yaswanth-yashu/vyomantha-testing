@@ -5,7 +5,7 @@ import {
   CheckCircle, Circle, Clock, Play, GraduationCap, ChevronRight, ArrowLeft, Users, Tag, BookOpen
 } from 'lucide-react';
 import { T } from '@/lib/lms-data';
-import { getCourses, getCourseSyllabus, checkStudentEnrollment, enrollStudentInCourse, getStudentEnrollments } from '@/lib/frappe';
+import { getCourses, getCourseSyllabus, checkStudentEnrollment, enrollStudentInCourse, getStudentEnrollments, saveProgressToRedis, getProgressFromRedis } from '@/lib/frappe';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 
 export default function CoursePage() {
@@ -74,10 +74,28 @@ export default function CoursePage() {
       key = `completed_lessons_${email}`;
     }
     const savedCompleted = localStorage.getItem(key);
+    let localCompleted = {};
     if (savedCompleted) {
       try {
-        setCompleted(JSON.parse(savedCompleted));
+        localCompleted = JSON.parse(savedCompleted);
+        setCompleted(localCompleted);
       } catch (e) {}
+    }
+
+    if (email) {
+      getProgressFromRedis(email).then(async (remoteCompleted) => {
+        if (remoteCompleted) {
+          const merged = { ...localCompleted, ...remoteCompleted };
+          setCompleted(merged);
+          localStorage.setItem(`completed_lessons_${email}`, JSON.stringify(merged));
+          
+          const remoteKeys = Object.keys(remoteCompleted).length;
+          const mergedKeys = Object.keys(merged).length;
+          if (mergedKeys > remoteKeys) {
+            await saveProgressToRedis(email, merged);
+          }
+        }
+      }).catch(err => console.error("Error synchronizing progress:", err));
     }
   }, []);
 

@@ -5,7 +5,7 @@ import {
   BookOpen, Brain, CheckCircle, ChevronRight, GraduationCap, Flame
 } from 'lucide-react';
 import { T, getCourseDetails } from '@/lib/lms-data';
-import { getCourses, getStudentEnrollments } from '@/lib/frappe';
+import { getCourses, getStudentEnrollments, getCourseSyllabus, saveProgressToRedis, getProgressFromRedis } from '@/lib/frappe';
 import { useMediaQuery, isMobileMQ, isTabletMQ } from '@/lib/useMediaQuery';
 
 export default function Dashboard() {
@@ -43,7 +43,22 @@ export default function Dashboard() {
         setCourses(published);
 
         const enrolled = published.filter(c => enrollments.includes(c.id));
-        setEnrolledCourses(enrolled);
+        
+        // Fetch syllabus/details for all enrolled courses in parallel
+        const enrolledWithDetails = await Promise.all(
+          enrolled.map(async (course) => {
+            try {
+              const details = await getCourseSyllabus(course.id);
+              return { ...course, details };
+            } catch (err) {
+              console.error("Failed to fetch syllabus for course:", course.id, err);
+              // Fallback to local getCourseDetails
+              const details = getCourseDetails(course);
+              return { ...course, details };
+            }
+          })
+        );
+        setEnrolledCourses(enrolledWithDetails);
       } catch (e) {
         console.error(e);
       } finally {
@@ -53,6 +68,7 @@ export default function Dashboard() {
     loadDashboardData();
 
     let key = 'completed_lessons';
+    let email = '';
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('frappe_user');
       if (stored) {
@@ -60,15 +76,34 @@ export default function Dashboard() {
           const user = JSON.parse(stored);
           if (user && user.email) {
             key = `completed_lessons_${user.email}`;
+            email = user.email;
           }
         } catch (e) {}
       }
     }
     const savedCompleted = localStorage.getItem(key);
+    let localCompleted = {};
     if (savedCompleted) {
       try {
-        setCompleted(JSON.parse(savedCompleted));
+        localCompleted = JSON.parse(savedCompleted);
+        setCompleted(localCompleted);
       } catch (e) {}
+    }
+
+    if (email) {
+      getProgressFromRedis(email).then(async (remoteCompleted) => {
+        if (remoteCompleted) {
+          const merged = { ...localCompleted, ...remoteCompleted };
+          setCompleted(merged);
+          localStorage.setItem(`completed_lessons_${email}`, JSON.stringify(merged));
+          
+          const remoteKeys = Object.keys(remoteCompleted).length;
+          const mergedKeys = Object.keys(merged).length;
+          if (mergedKeys > remoteKeys) {
+            await saveProgressToRedis(email, merged);
+          }
+        }
+      }).catch(err => console.error("Error synchronizing progress:", err));
     }
   }, []);
 
@@ -77,27 +112,46 @@ export default function Dashboard() {
   let totalModules = 0;
   let completedCount = 0;
 
-  enrolledCourses.forEach(course => {
-    const details = getCourseDetails(course);
+  const enrolledWithProgress = enrolledCourses.map(course => {
+    const details = course.details || getCourseDetails(course);
+    let courseLessonsCount = 0;
+    let courseCompletedCount = 0;
+    let courseModulesCount = 0;
+
     if (details && details.modules) {
-      totalModules += details.modules.length;
+      courseModulesCount = details.modules.length;
       details.modules.forEach(m => {
         if (m.lessons) {
-          totalLessons += m.lessons.length;
+          courseLessonsCount += m.lessons.length;
           m.lessons.forEach(l => {
             if (completed[l.id]) {
-              completedCount++;
+              courseCompletedCount++;
             }
           });
         }
       });
     }
+
+    const pct = courseLessonsCount > 0 ? Math.round((courseCompletedCount / courseLessonsCount) * 100) : 0;
+
+    // Accumulate overall stats
+    totalLessons += courseLessonsCount;
+    totalModules += courseModulesCount;
+    completedCount += courseCompletedCount;
+
+    return {
+      ...course,
+      modulesCount: courseModulesCount,
+      lessonsCount: courseLessonsCount,
+      completedCount: courseCompletedCount,
+      progressPercent: pct
+    };
   });
 
-  const progressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
+  const overallProgressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
 
   const stats = [
-    { label: 'Lessons Completed', val: `${completedCount}/${totalLessons}`, sub: `${progressPercent}% done`, color: T.accent, Icon: CheckCircle },
+    { label: 'Lessons Completed', val: `${completedCount}/${totalLessons}`, sub: `${overallProgressPercent}% done`, color: T.accent, Icon: CheckCircle },
     { label: 'Enrolled Courses', val: `${enrolledCourses.length}`, sub: 'Active cohort learning', color: T.green, Icon: BookOpen },
     { label: 'AI Tools Ready', val: '3', sub: 'General, Coding & Voice Tutor', color: T.purple, Icon: Brain },
   ];
@@ -155,26 +209,26 @@ export default function Dashboard() {
               <GraduationCap size={13} /> Active Syllabus
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>
-              {enrolledCourses[0]?.title || 'No Courses Enrolled'}
+              {enrolledWithProgress[0]?.title || 'No Courses Enrolled'}
             </div>
             <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>
-              {enrolledCourses[0] ? `${getCourseDetails(enrolledCourses[0])?.modules?.length || 0} modules · ${getCourseDetails(enrolledCourses[0])?.modules?.flatMap(m => m.lessons).length || 0} lessons` : 'Go to Explore Courses to enroll and start learning!'}
+              {enrolledWithProgress[0] ? `${enrolledWithProgress[0].modulesCount} modules · ${enrolledWithProgress[0].lessonsCount} lessons` : 'Go to Explore Courses to enroll and start learning!'}
             </div>
           </div>
 
           <div>
-            {enrolledCourses[0] && (
+            {enrolledWithProgress[0] && (
               <>
                 <div style={{ background: T.s3, borderRadius: 99, height: 6, marginBottom: 8, overflow: 'hidden' }}>
-                  <div style={{ background: T.accent, height: 6, borderRadius: 99, width: `${progressPercent}%`, transition: 'width 0.5s' }} />
+                  <div style={{ background: T.accent, height: 6, borderRadius: 99, width: `${enrolledWithProgress[0].progressPercent}%`, transition: 'width 0.5s' }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-                  <span style={{ fontSize: 12, color: T.muted }}>{progressPercent}% complete</span>
+                  <span style={{ fontSize: 12, color: T.muted }}>{enrolledWithProgress[0].progressPercent}% complete</span>
                   <a 
                     href="/courses" 
                     onClick={() => {
-                      if (typeof window !== 'undefined' && enrolledCourses[0]) {
-                        localStorage.setItem('selected_course_id', enrolledCourses[0].id);
+                      if (typeof window !== 'undefined' && enrolledWithProgress[0]) {
+                        localStorage.setItem('selected_course_id', enrolledWithProgress[0].id);
                       }
                     }}
                     style={{ background: T.accent, color: '#000', border: 'none', padding: '7px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none' }}
@@ -184,7 +238,7 @@ export default function Dashboard() {
                 </div>
               </>
             )}
-            {!enrolledCourses[0] && (
+            {!enrolledWithProgress[0] && (
               <a href="/courses" style={{ background: T.accent, color: '#000', border: 'none', padding: '8px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, textDecoration: 'none' }}>
                 Go to Courses <ChevronRight size={13} />
               </a>
@@ -215,6 +269,52 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {/* Other Enrolled Courses Grid */}
+      {enrolledWithProgress.length > 1 && (
+        <div style={{ marginTop: 28 }}>
+          <h2 style={{ color: T.text, fontSize: 15, fontWeight: 700, marginBottom: 14, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <BookOpen size={16} color={T.accent} /> Other Enrolled Courses
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: bottomCols, gap: 14 }}>
+            {enrolledWithProgress.slice(1).map(course => (
+              <div key={course.id} style={{ background: T.s1, border: `1px solid ${T.border}`, borderRadius: 12, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 140 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: T.accent, fontWeight: 600, marginBottom: 4 }}>
+                    {course.category}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+                    {course.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>
+                    {course.modulesCount} modules · {course.lessonsCount} lessons
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ background: T.s3, borderRadius: 99, height: 6, marginBottom: 8, overflow: 'hidden' }}>
+                    <div style={{ background: T.accent, height: 6, borderRadius: 99, width: `${course.progressPercent}%`, transition: 'width 0.5s' }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                    <span style={{ fontSize: 12, color: T.muted }}>{course.progressPercent}% complete</span>
+                    <a 
+                      href="/courses" 
+                      onClick={() => {
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('selected_course_id', course.id);
+                        }
+                      }}
+                      style={{ background: T.accent, color: '#000', border: 'none', padding: '6px 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                    >
+                      Continue <ChevronRight size={12} />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

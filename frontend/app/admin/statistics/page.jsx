@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { BookOpen, Users, Calendar, FileText, ArrowUpRight, TrendingUp } from 'lucide-react';
 import { T } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
-import { getCourses, getBatches, getQuizSubmissions, getAssignmentSubmissions, getCertificates } from '@/lib/frappe';
+import { getCourses, getBatches, getQuizSubmissions, getAssignmentSubmissions, getCertificates, getLMSStudents } from '@/lib/frappe';
 
 export default function AdminStatisticsPage() {
   const isMobile = useMediaQuery(isMobileMQ);
@@ -41,43 +41,62 @@ export default function AdminStatisticsPage() {
           getCertificates()
         ]);
 
-        // 5 Student logins
-        const students = [
-          { username: 'student1@lms.com', name: 'Aarav Mehta' },
-          { username: 'student2@lms.com', name: 'Sneha Patel' },
-          { username: 'student3@lms.com', name: 'Rohan Sharma' },
-          { username: 'student4@lms.com', name: 'Priya Nair' },
-          { username: 'student5@lms.com', name: 'Aditya Rao' }
-        ];
+        // Fetch student list dynamically from Frappe / local fallback
+        const students = await getLMSStudents();
+        setStudentsCount(students.length);
 
-        // Seed default completions if not set so there is initial progress values
-        const defaultLessonsCompletions = [
-          { '1_l1': true, '2_l1': true, '3_l1': true, 'python_l1': true }, // Aarav: 4 lessons done
-          { '1_l1': true, '2_l1': true },                                 // Sneha: 2 lessons done
-          { '1_l1': true, '2_l1': true, '3_l1': true, '4_l1': true },     // Rohan: 4 lessons done
-          { '1_l1': true },                                               // Priya: 1 lesson done
-          {}                                                              // Aditya: 0 lessons done
-        ];
-
-        students.forEach((std, idx) => {
-          const key = `completed_lessons_${std.username}`;
-          if (!localStorage.getItem(key)) {
-            localStorage.setItem(key, JSON.stringify(defaultLessonsCompletions[idx]));
+        // Fetch student completions from /api/progress
+        let allProgress = {};
+        try {
+          const res = await fetch('/api/progress');
+          if (res.ok) {
+            const data = await res.json();
+            allProgress = data.allProgress || {};
           }
-        });
+        } catch (e) {
+          console.error("Failed to load student progress from API:", e);
+        }
 
-        // Parse student completions from LocalStorage
-        const studentCompletions = students.map(std => {
-          const key = `completed_lessons_${std.username}`;
-          let completed = {};
-          try {
-            completed = JSON.parse(localStorage.getItem(key)) || {};
-          } catch(e) {}
+        // Seed default completions if not set so there are initial progress values
+        const defaultLessonsCompletions = {
+          'student1@lms.com': { '1_l1': true, '2_l1': true, '3_l1': true, 'python_l1': true }, // Aarav
+          'student2@lms.com': { '1_l1': true, '2_l1': true },                                 // Sneha
+          'student3@lms.com': { '1_l1': true, '2_l1': true, '3_l1': true, '4_l1': true },     // Rohan
+          'student4@lms.com': { '1_l1': true },                                               // Priya
+          'student5@lms.com': {}                                                              // Aditya
+        };
+
+        const studentCompletions = await Promise.all(students.map(async (std) => {
+          let completed = allProgress[std.username];
+
+          // If no progress in Redis, fall back to localStorage
+          if (!completed) {
+            const localKey = `completed_lessons_${std.username}`;
+            try {
+              completed = JSON.parse(localStorage.getItem(localKey));
+            } catch (e) {}
+          }
+
+          // If still no progress, use default completions for standard students
+          if (!completed) {
+            completed = defaultLessonsCompletions[std.username] || {};
+            
+            // Seed Redis and LocalStorage with default progress
+            try {
+              localStorage.setItem(`completed_lessons_${std.username}`, JSON.stringify(completed));
+              await fetch('/api/progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: std.username, completed })
+              });
+            } catch (e) {}
+          }
+
           return {
             ...std,
             completed
           };
-        });
+        }));
 
         // Set counters
         setCoursesCount(coursesData.length);

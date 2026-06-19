@@ -1,0 +1,29 @@
+import os
+
+def main():
+    api_path = 'apps/lms/lms/api.py'
+    if not os.path.exists(api_path):
+        print(f"Error: {api_path} not found!")
+        return
+
+    with open(api_path, 'r') as f:
+        content = f.read()
+
+    if 'get_google_auth_url' in content:
+        print("get_google_auth_url already exists in api.py. Skipping patch.")
+        return
+
+    patch_code = """
+
+@frappe.whitelist(allow_guest=True)
+def get_google_auth_url(redirect_to=None):
+    from frappe.utils.oauth import get_oauth2_authorize_url
+    return get_oauth2_authorize_url("google", redirect_to)
+"""
+
+    with open(api_path, 'a') as f:
+        f.write(patch_code)
+    print("Patched apps/lms/lms/api.py successfully!")
+
+if __name__ == '__main__':
+    main()

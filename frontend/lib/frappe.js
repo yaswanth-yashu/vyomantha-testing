@@ -1863,3 +1863,59 @@ export async function saveCertificateConfig(config) {
   }
   return config;
 }
+
+export async function saveProgressToRedis(email, completed) {
+  try {
+    const res = await fetch('/api/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, completed })
+    });
+    return res.ok;
+  } catch (e) {
+    console.error("Failed to save progress to Redis:", e);
+    return false;
+  }
+}
+
+export async function getProgressFromRedis(email) {
+  try {
+    const res = await fetch(`/api/progress?email=${encodeURIComponent(email)}`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.completed || {};
+    }
+  } catch (e) {
+    console.error("Failed to get progress from Redis:", e);
+  }
+  return null;
+}
+
+export async function getLMSStudents() {
+  if (FRAPPE_URL) {
+    try {
+      const users = await frappeRestGet("User", {
+        fields: JSON.stringify(["name", "email", "full_name", "enabled"]),
+        filters: JSON.stringify([
+          ["name", "!=", "Administrator"],
+          ["name", "!=", "Guest"],
+          ["enabled", "=", 1]
+        ]),
+        limit_page_length: 500
+      });
+      return users.map(u => ({
+        username: u.email || u.name,
+        name: u.full_name || u.name
+      }));
+    } catch (e) {
+      console.error("Failed to fetch students from Frappe REST API, falling back.", e);
+    }
+  }
+  return [
+    { username: 'student1@lms.com', name: 'Aarav Mehta' },
+    { username: 'student2@lms.com', name: 'Sneha Patel' },
+    { username: 'student3@lms.com', name: 'Rohan Sharma' },
+    { username: 'student4@lms.com', name: 'Priya Nair' },
+    { username: 'student5@lms.com', name: 'Aditya Rao' }
+  ];
+}

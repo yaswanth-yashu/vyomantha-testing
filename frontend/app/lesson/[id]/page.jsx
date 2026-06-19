@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getCourses, getCourseSyllabus, frappeRestGet } from '@/lib/frappe';
+import { getCourses, getCourseSyllabus, frappeRestGet, saveProgressToRedis, getProgressFromRedis } from '@/lib/frappe';
 import { getCourseDetails } from '@/lib/lms-data';
 import LessonPage from '@/components/LessonPage';
 
@@ -17,6 +17,7 @@ export default function LessonRoute() {
   // Sync completion states
   useEffect(() => {
     let key = 'completed_lessons';
+    let email = '';
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('frappe_user');
       if (stored) {
@@ -24,14 +25,33 @@ export default function LessonRoute() {
           const user = JSON.parse(stored);
           if (user && user.email) {
             key = `completed_lessons_${user.email}`;
+            email = user.email;
           }
         } catch (e) {}
       }
       const saved = localStorage.getItem(key);
+      let localCompleted = {};
       if (saved) {
         try {
-          setCompleted(JSON.parse(saved));
+          localCompleted = JSON.parse(saved);
+          setCompleted(localCompleted);
         } catch (e) {}
+      }
+
+      if (email) {
+        getProgressFromRedis(email).then(async (remoteCompleted) => {
+          if (remoteCompleted) {
+            const merged = { ...localCompleted, ...remoteCompleted };
+            setCompleted(merged);
+            localStorage.setItem(`completed_lessons_${email}`, JSON.stringify(merged));
+            
+            const remoteKeys = Object.keys(remoteCompleted).length;
+            const mergedKeys = Object.keys(merged).length;
+            if (mergedKeys > remoteKeys) {
+              await saveProgressToRedis(email, merged);
+            }
+          }
+        }).catch(err => console.error("Error synchronizing progress:", err));
       }
     }
   }, []);
@@ -102,8 +122,9 @@ export default function LessonRoute() {
     loadLesson();
   }, [id]);
 
-  const onComplete = (lessonId) => {
+  const onComplete = async (lessonId) => {
     let key = 'completed_lessons';
+    let email = '';
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('frappe_user');
       if (stored) {
@@ -111,6 +132,7 @@ export default function LessonRoute() {
           const user = JSON.parse(stored);
           if (user && user.email) {
             key = `completed_lessons_${user.email}`;
+            email = user.email;
           }
         } catch (e) {}
       }
@@ -118,6 +140,14 @@ export default function LessonRoute() {
     const updated = { ...completed, [lessonId]: true };
     setCompleted(updated);
     localStorage.setItem(key, JSON.stringify(updated));
+
+    if (email) {
+      try {
+        await saveProgressToRedis(email, updated);
+      } catch (err) {
+        console.error("Failed to sync completed lesson to Redis:", err);
+      }
+    }
   };
 
   if (loading) {
