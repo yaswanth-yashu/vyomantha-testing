@@ -152,13 +152,33 @@ except Exception as e:
 # Diagnostics check at startup
 try:
     print("DIAGNOSTICS: Calling get_google_auth_url...")
+    import lms.lms.api
+    print("DIAGNOSTICS api.__file__:", lms.lms.api.__file__)
+    print("DIAGNOSTICS api attributes:", [attr for attr in dir(lms.lms.api) if 'google' in attr or 'traceback' in attr])
+    
+    try:
+        with open(lms.lms.api.__file__, 'r') as f:
+            lines = f.readlines()
+        print("DIAGNOSTICS api.py last 30 lines:")
+        for line in lines[-30:]:
+            print(line.rstrip())
+    except Exception as file_err:
+        print("Failed to read api.py:", file_err)
+
     from lms.lms.api import get_google_auth_url
     res = get_google_auth_url("http://localhost:3000/auth/callback")
     print("DIAGNOSTICS SUCCESS:", res)
 except Exception as e:
     import traceback
+    tb_str = traceback.format_exc()
     print("DIAGNOSTICS FAILED:", e)
-    traceback.print_exc()
+    print(tb_str)
+    try:
+        frappe.log_error(title="Google Auth Diagnostics", message=tb_str)
+        frappe.db.commit()
+        print("Logged diagnostic failure to database successfully.")
+    except Exception as db_err:
+        print("Failed to log error to database:", db_err)
 
 frappe.db.commit()
 print("Students bootstrap completed successfully!")
