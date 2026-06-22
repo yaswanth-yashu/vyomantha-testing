@@ -103,6 +103,46 @@ def get_environ_debug():
         "client_secret_start": client_secret[:10],
         "client_secret_end": client_secret[-4:] if client_secret else ""
     }
+
+# Monkey patch login_via_google to catch errors and redirect gracefully to the frontend login page
+try:
+    import frappe.integrations.oauth2_logins
+    orig_login_via_google = frappe.integrations.oauth2_logins.login_via_google
+
+    def patched_login_via_google(code: str, state: str, **kwargs):
+        import frappe
+        try:
+            return orig_login_via_google(code, state, **kwargs)
+        except Exception as e:
+            import traceback
+            frappe.log_error(title="Google Login Failed", message=traceback.format_exc())
+            frappe.db.commit()
+            
+            # Determine redirect destination
+            import base64
+            import json
+            from urllib.parse import urlparse
+            frontend_url = "https://vyomanta.vercel.app"
+            try:
+                state_data = json.loads(base64.b64decode(state).decode("utf-8"))
+                redirect_to = state_data.get("redirect_to")
+                if redirect_to:
+                    parsed = urlparse(redirect_to)
+                    frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+            except Exception:
+                pass
+            
+            frappe.local.response["type"] = "redirect"
+            frappe.local.response["location"] = f"{frontend_url}/login?error=oauth_failed"
+
+    # Retain the whitelist flag
+    patched_login_via_google.whitelisted = True
+    patched_login_via_google.allow_guest = True
+    
+    frappe.integrations.oauth2_logins.login_via_google = patched_login_via_google
+except Exception as patch_err:
+    import frappe
+    frappe.log_error(title="Monkey Patch Failed", message=str(patch_err))
 """
 
     with open(api_path, 'w') as f:
