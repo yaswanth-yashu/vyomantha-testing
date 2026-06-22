@@ -122,7 +122,7 @@ try:
     @frappe.whitelist(allow_guest=True)
     def patched_login_via_google(code: str, state: str, **kwargs):
         try:
-            return orig_login_via_google(code, state, **kwargs)
+            return orig_login_via_google(code, state)
         except Exception as e:
             import traceback
             frappe.log_error(title="Google Login Failed", message=traceback.format_exc())
