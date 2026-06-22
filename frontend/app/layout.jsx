@@ -16,7 +16,15 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={outfit.variable}>
-      <body style={{ margin: 0, padding: 0, backgroundColor: '#07080F' }}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            var theme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+          })();
+        `}} />
+      </head>
+      <body style={{ margin: 0, padding: 0, backgroundColor: 'var(--bg)' }}>
         <LayoutWrapper>{children}</LayoutWrapper>
       </body>
     </html>

@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  BookOpen, Brain, Code2, BarChart3, Home, Zap, LogOut, Briefcase, Award, FileText, FolderOpen
+  BookOpen, Brain, Code2, BarChart3, Home, Zap, LogOut, Briefcase, Award, FileText, FolderOpen, Sun, Moon
 } from 'lucide-react';
-import { T } from '@/lib/lms-data';
+import { T, getTheme, setTheme } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 import MobileNav from './MobileNav';
 
@@ -94,14 +94,37 @@ export default function Sidebar() {
       flexDirection: 'column', padding: '24px 0', flexShrink: 0
     }}>
       <div style={{ padding: '0 20px 28px', borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${T.accent}22`, border: `1px solid ${T.accent}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Zap size={18} color={T.accent} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${T.accent}22`, border: `1px solid ${T.accent}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Zap size={18} color={T.accent} />
+            </div>
+            <div>
+              <div style={{ color: T.text, fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>LMS AI</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Learning Platform</div>
+            </div>
           </div>
-          <div>
-            <div style={{ color: T.text, fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>LMS AI</div>
-            <div style={{ color: T.muted, fontSize: 11 }}>Learning Platform</div>
-          </div>
+          <button
+            onClick={() => setTheme(getTheme() === 'dark' ? 'light' : 'dark')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: T.muted,
+              cursor: 'pointer',
+              padding: 6,
+              display: 'flex',
+              alignItems: 'center',
+              borderRadius: 8,
+              transition: 'all 0.2s',
+              background: `${T.accent}12`,
+              border: `1px solid ${T.border}`
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = T.accent; e.currentTarget.style.background = `${T.accent}22`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = `${T.accent}12`; }}
+            title={`Switch to ${getTheme() === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            {getTheme() === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
         </div>
       </div>
       <div style={{ flex: 1, padding: '0 12px' }}>

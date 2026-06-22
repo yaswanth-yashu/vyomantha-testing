@@ -5,9 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Home, Search, Bell, BookOpen, Layers, Users, Award,
   Briefcase, BarChart3, CheckSquare, FileText, Code2,
-  Plus, HelpCircle, LogOut
+  Plus, HelpCircle, LogOut, Sun, Moon
 } from 'lucide-react';
-import { T } from '@/lib/lms-data';
+import { T, getTheme, setTheme } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 
 // Admin-specific navigation items
@@ -64,6 +64,9 @@ export default function AdminSidebar() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => setTheme(getTheme() === 'dark' ? 'light' : 'dark')} style={{ background: 'transparent', border: 'none', color: T.muted, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            {getTheme() === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           <button onClick={handleLogout} style={{ background: 'transparent', border: 'none', color: T.muted, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
             <LogOut size={16} />
           </button>
@@ -82,14 +85,37 @@ export default function AdminSidebar() {
     }}>
       {/* Brand Header */}
       <div style={{ padding: '0 20px 16px', borderBottom: `1px solid ${T.border}`, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${T.purple}22`, border: `1px solid ${T.purple}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Layers size={18} color={T.purple} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${T.purple}22`, border: `1px solid ${T.purple}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Layers size={18} color={T.purple} />
+            </div>
+            <div>
+              <div style={{ color: T.text, fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>Learning</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Admin Portal</div>
+            </div>
           </div>
-          <div>
-            <div style={{ color: T.text, fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>Learning</div>
-            <div style={{ color: T.muted, fontSize: 11 }}>Admin Portal</div>
-          </div>
+          <button
+            onClick={() => setTheme(getTheme() === 'dark' ? 'light' : 'dark')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: T.muted,
+              cursor: 'pointer',
+              padding: 6,
+              display: 'flex',
+              alignItems: 'center',
+              borderRadius: 8,
+              transition: 'all 0.2s',
+              background: `${T.purple}12`,
+              border: `1px solid ${T.border}`
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = T.purple; e.currentTarget.style.background = `${T.purple}22`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = `${T.purple}12`; }}
+            title={`Switch to ${getTheme() === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            {getTheme() === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
         </div>
       </div>
 

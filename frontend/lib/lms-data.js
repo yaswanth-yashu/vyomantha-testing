@@ -1,10 +1,37 @@
 // ── Design tokens ─────────────────────────────────────
-export const T = {
+const darkT = {
   bg: "#07080F", s1: "#0C0F1C", s2: "#111827", s3: "#182033",
   border: "rgba(255,255,255,0.07)", accent: "#5B8CF8", green: "#22C5A0",
   purple: "#9B6EF8", amber: "#F5A95B", red: "#F55B6B",
   text: "#DDE3F2", muted: "#647298", dim: "#3A4560",
 };
+
+const lightT = {
+  bg: "#F8F9FC", s1: "#FFFFFF", s2: "#F1F3F9", s3: "#E2E8F0",
+  border: "rgba(15, 23, 42, 0.08)", accent: "#1A73E8", green: "#137333",
+  purple: "#7048E8", amber: "#E37400", red: "#D93025",
+  text: "#0F172A", muted: "#475569", dim: "#94A3B8",
+};
+
+const currentTheme = (typeof window !== 'undefined' ? localStorage.getItem('theme') : null) || 'light';
+const activeT = currentTheme === 'dark' ? darkT : lightT;
+
+export const T = activeT;
+
+export function getTheme() {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('theme') || 'light';
+  }
+  return 'light';
+}
+
+export function setTheme(theme) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    window.location.reload();
+  }
+}
 
 // ── Course data ───────────────────────────────────────
 export const COURSE = {

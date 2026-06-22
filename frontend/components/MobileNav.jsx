@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, X } from 'lucide-react';
-import { T } from '@/lib/lms-data';
+import { Menu, X, Sun, Moon } from 'lucide-react';
+import { T, getTheme, setTheme } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 
 export default function MobileNav({ title, accent, items, extras, zBase = 0 }) {
@@ -46,7 +46,13 @@ export default function MobileNav({ title, accent, items, extras, zBase = 0 }) {
         <div style={{ color: T.text, fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em' }}>
           {title}
         </div>
-        <div style={{ width: 36 }} />
+        <button onClick={() => setTheme(getTheme() === 'dark' ? 'light' : 'dark')} style={{
+          width: 36, height: 36, borderRadius: 8,
+          background: 'none', border: 'none', color: T.text, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {getTheme() === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
       </div>
 
       {/* ── Centered menu overlay ── */}

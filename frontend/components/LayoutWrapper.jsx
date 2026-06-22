@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from './Sidebar';
 import AdminSidebar from './AdminSidebar';
+import { T } from '@/lib/lms-data';
 
 export default function LayoutWrapper({ children }) {
   const pathname = usePathname();
@@ -67,6 +68,13 @@ export default function LayoutWrapper({ children }) {
     setLoading(false);
   }, [pathname, router]);
 
+  useEffect(() => {
+    // Configure layout background dynamically matching theme
+    const theme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.style.backgroundColor = theme === 'dark' ? '#07080F' : '#F9FAFB';
+  }, []);
+
   if (loading) {
     return (
       <div style={{
@@ -74,10 +82,10 @@ export default function LayoutWrapper({ children }) {
         width: '100vw',
         minWidth: '100vw',
         minHeight: '100vh',
-        background: '#07080F',
+        background: T.bg,
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#DDE3F2',
+        color: T.text,
         fontFamily: 'var(--font-outfit), sans-serif',
         position: 'fixed',
         top: 0,
@@ -89,11 +97,11 @@ export default function LayoutWrapper({ children }) {
             width: 32,
             height: 32,
             borderRadius: '50%',
-            border: '2px solid rgba(91, 140, 248, 0.2)',
-            borderTopColor: '#5B8CF8',
+            border: `2px solid ${T.accent}33`,
+            borderTopColor: T.accent,
             animation: 'spin 1s linear infinite'
           }} />
-          <div style={{ fontSize: 14, color: '#647298' }}>Loading LMS Portal...</div>
+          <div style={{ fontSize: 14, color: T.muted }}>Loading LMS Portal...</div>
         </div>
       </div>
     );
@@ -103,13 +111,13 @@ export default function LayoutWrapper({ children }) {
 
   // Auth pages (like /login) render directly without a sidebar
   if (isAuthPage || !user) {
-    return <div style={{ minHeight: '100vh', background: '#07080F', color: '#DDE3F2' }}>{children}</div>;
+    return <div style={{ minHeight: '100vh', background: T.bg, color: T.text }}>{children}</div>;
   }
 
   const isAdminRoute = pathname.startsWith('/admin');
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#07080F', color: '#DDE3F2', width: '100%' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, color: T.text, width: '100%' }}>
       {isAdminRoute ? <AdminSidebar /> : <Sidebar />}
       <div className="sidebar-content-area" style={{ flex: 1, overflowY: 'auto', maxHeight: '100vh' }}>
         {children}
