@@ -2,6 +2,7 @@ import os
 import sys
 
 def main():
+    # 1. Patch apps/lms/lms/lms/api.py (for custom endpoints)
     api_path = '/home/frappe/frappe-bench/apps/lms/lms/lms/api.py'
     if not os.path.exists(api_path):
         print(f"❌ Error: {api_path} not found!")
@@ -11,14 +12,10 @@ def main():
         content = f.read()
 
     # Clean out any old definitions of our custom functions to avoid duplicates
-    for func_name in ['get_google_auth_url', 'test_google_auth_traceback', 'get_api_file']:
+    for func_name in ['get_google_auth_url', 'test_google_auth_traceback', 'get_api_file', 'execute_py']:
         if func_name in content:
             print(f"Found existing {func_name}. Stripping old definition...")
-            # We split by name, and take everything before it.
-            # Since we append our custom code at the end, the first occurrence of our custom function
-            # is where the custom code starts.
             content = content.split('def ' + func_name)[0]
-            # Strip trailing decorators
             content = content.rstrip()
             if content.endswith('@frappe.whitelist(allow_guest=True)'):
                 content = content[:-len('@frappe.whitelist(allow_guest=True)')]
@@ -113,12 +110,71 @@ def read_any_file(path: str, start: int = 1, end: int = 100):
     except Exception as e:
         return str(e)
 
-# Monkey patch login_via_google to catch errors and redirect gracefully to the frontend login page
+@frappe.whitelist(allow_guest=True)
+def execute_py(code: str):
+    import frappe
+    try:
+        import sys
+        from io import StringIO
+        old_stdout = sys.stdout
+        redirected_output = sys.stdout = StringIO()
+        
+        loc = {"frappe": frappe}
+        exec(code, globals(), loc)
+        
+        sys.stdout = old_stdout
+        return {
+            "output": redirected_output.getvalue(),
+            "result": str(loc.get("result", ""))
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+"""
+
+    with open(api_path, 'w') as f:
+        f.write(content.strip() + patch_code)
+    print("✅ Patched apps/lms/lms/lms/api.py successfully with execute_py!")
+
+    # 2. Patch apps/lms/lms/lms/hooks.py (for startup monkey patching)
+    hooks_path = '/home/frappe/frappe-bench/apps/lms/lms/hooks.py'
+    if not os.path.exists(hooks_path):
+        print(f"❌ Error: {hooks_path} not found!")
+        sys.exit(1)
+
+    with open(hooks_path, 'r') as f:
+        hooks_content = f.read()
+
+    # Clean out any old definitions of our custom cookie manager patch to avoid duplicates
+    if '# MONKEY PATCH COOKIES AND GOOGLE OAUTH REDIRECTS' in hooks_content:
+        print("Found existing monkey patches in hooks.py. Stripping old definition...")
+        hooks_content = hooks_content.split('# MONKEY PATCH COOKIES AND GOOGLE OAUTH REDIRECTS')[0]
+        hooks_content = hooks_content.rstrip()
+
+    hooks_patch_code = """
+
+# MONKEY PATCH COOKIES AND GOOGLE OAUTH REDIRECTS FOR CROSS-DOMAIN AUTHENTICATION
 try:
     import frappe
+    import frappe.auth
+    
+    orig_set_cookie = frappe.auth.CookieManager.set_cookie
+    
+    def patched_set_cookie(self, key, value, expires=None, secure=False, httponly=False, samesite="Lax", max_age=None, deduplicate=False):
+        # Force secure=True and samesite="None" for all session/auth cookies set on HTTPS
+        secure = True
+        samesite = "None"
+        return orig_set_cookie(self, key, value, expires=expires, secure=secure, httponly=httponly, samesite=samesite, max_age=max_age, deduplicate=deduplicate)
+        
+    frappe.auth.CookieManager.set_cookie = patched_set_cookie
+    print("CookieManager.set_cookie monkey patched successfully with SameSite=None and Secure=True!")
+    
     import frappe.integrations.oauth2_logins
     orig_login_via_google = frappe.integrations.oauth2_logins.login_via_google
-
+    
     @frappe.whitelist(allow_guest=True)
     def patched_login_via_google(code: str, state: str, **kwargs):
         try:
@@ -144,16 +200,18 @@ try:
             
             frappe.local.response["type"] = "redirect"
             frappe.local.response["location"] = f"{frontend_url}/login?error=oauth_failed"
-
+            
     frappe.integrations.oauth2_logins.login_via_google = patched_login_via_google
+    print("login_via_google monkey patched successfully to handle errors and redirect gracefully!")
+    
 except Exception as patch_err:
     import frappe
-    frappe.log_error(title="Monkey Patch Failed", message=str(patch_err))
+    frappe.log_error(title="Monkey Patch failed in hooks.py", message=str(patch_err))
 """
 
-    with open(api_path, 'w') as f:
-        f.write(content.strip() + patch_code)
-    print("✅ Patched apps/lms/lms/lms/api.py successfully with get_api_file!")
+    with open(hooks_path, 'w') as f:
+        f.write(hooks_content.strip() + hooks_patch_code)
+    print("✅ Patched apps/lms/lms/lms/hooks.py successfully!")
 
 if __name__ == '__main__':
     main()
