@@ -63,6 +63,68 @@ export default function CodingTutor() {
   const chatRef = useRef(null);
   const inputRef = useRef(null);
   
+  const [codeOverride, setCodeOverride] = useState(null);
+
+  const handleVisualizeCode = (codeText) => {
+    setIsPlaygroundOpen(true);
+    setCodeOverride(codeText);
+  };
+
+  const renderMarkdown = (content) => {
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ node, inline, className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '');
+            const isPython = match && match[1] === 'python';
+            const codeVal = String(children).replace(/\n$/, '');
+
+            if (!inline && isPython) {
+              return (
+                <div style={{ position: 'relative', margin: '12px 0' }}>
+                  <pre className={className} {...props} style={{ margin: 0 }}>
+                    <code>{children}</code>
+                  </pre>
+                  <button
+                    onClick={() => handleVisualizeCode(codeVal)}
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      background: 'rgba(245, 169, 91, 0.15)',
+                      border: '1px solid rgba(245, 169, 91, 0.4)',
+                      borderRadius: 6,
+                      color: '#F5A95B',
+                      padding: '4px 8px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      zIndex: 10,
+                      transition: 'all 0.15s',
+                      fontFamily: 'inherit'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245, 169, 91, 0.25)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245, 169, 91, 0.15)'; }}
+                  >
+                    <Zap size={11} fill="currentColor" />
+                    Visualize Code
+                  </button>
+                </div>
+              );
+            }
+            return <code className={className} {...props}>{children}</code>;
+          }
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  };
+  
   const textSessKey = 'coding-tutor-sessions';
   const voiceSessKey = 'voice-coding-tutor-sessions';
 
@@ -572,7 +634,7 @@ export default function CodingTutor() {
                         <div style={{ fontSize: 11, color: T.amber, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 4 }}>CODING TUTOR</div>
                         <div style={{ color: T.text, fontSize: 14, lineHeight: 1.7 }}>
                           <div className="md-content">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                            {renderMarkdown(msg.content)}
                           </div>
                         </div>
 
@@ -725,7 +787,7 @@ export default function CodingTutor() {
                             </div>
                             <div style={{ color: T.text, fontSize: 14, lineHeight: 1.7 }}>
                               <div className="md-content">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.features.simpler.text}</ReactMarkdown>
+                                {renderMarkdown(msg.features.simpler.text)}
                               </div>
                             </div>
                           </div>
@@ -742,7 +804,7 @@ export default function CodingTutor() {
                             </div>
                             <div style={{ color: T.text, fontSize: 14, lineHeight: 1.7 }}>
                               <div className="md-content">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.features.examples.text}</ReactMarkdown>
+                                {renderMarkdown(msg.features.examples.text)}
                               </div>
                             </div>
                           </div>
@@ -854,14 +916,22 @@ export default function CodingTutor() {
           {/* Sandbox Playground (Desktop side-by-side) */}
           {showSplitLayout && (
             <div style={{ flex: 0.45, height: '100%', background: '#090A0F', overflow: 'hidden' }}>
-              <Playground initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} />
+              <Playground 
+                initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} 
+                codeOverride={codeOverride}
+                onTraceComplete={() => setCodeOverride(null)}
+              />
             </div>
           )}
 
           {/* Sandbox Playground (Tablet / Mobile vertical stack) */}
           {showVerticalSplit && (
             <div style={{ flex: '0 0 50%', height: '50%', background: '#090A0F', borderTop: `1px solid ${T.border}`, overflow: 'hidden' }}>
-              <Playground initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} />
+              <Playground 
+                initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} 
+                codeOverride={codeOverride}
+                onTraceComplete={() => setCodeOverride(null)}
+              />
             </div>
           )}
 

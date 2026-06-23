@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-export function usePyodide({ onStdout, onStderr, onReady, onFinish, onError } = {}) {
+export function usePyodide({ onStdout, onStderr, onReady, onFinish, onError, onTraceResult } = {}) {
   const [isReady, setIsReady] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const workerRef = useRef(null);
 
   // Keep latest callbacks in ref to prevent recreating initWorker on every render
-  const callbacksRef = useRef({ onStdout, onStderr, onReady, onFinish, onError });
+  const callbacksRef = useRef({ onStdout, onStderr, onReady, onFinish, onError, onTraceResult });
   useEffect(() => {
-    callbacksRef.current = { onStdout, onStderr, onReady, onFinish, onError };
-  }, [onStdout, onStderr, onReady, onFinish, onError]);
+    callbacksRef.current = { onStdout, onStderr, onReady, onFinish, onError, onTraceResult };
+  }, [onStdout, onStderr, onReady, onFinish, onError, onTraceResult]);
 
   const initWorker = useCallback(() => {
     setIsReady(false);
@@ -33,6 +33,10 @@ export function usePyodide({ onStdout, onStderr, onReady, onFinish, onError } = 
           break;
         case 'STDERR':
           if (cb.onStderr) cb.onStderr(content);
+          break;
+        case 'TRACE_RESULT':
+          setIsRunning(false);
+          if (cb.onTraceResult) cb.onTraceResult(content);
           break;
         case 'FINISH':
           setIsRunning(false);
@@ -66,6 +70,12 @@ export function usePyodide({ onStdout, onStderr, onReady, onFinish, onError } = 
     workerRef.current.postMessage({ type: 'RUN', code });
   }, [isReady, isRunning]);
 
+  const runTrace = useCallback((code) => {
+    if (!isReady || isRunning || !workerRef.current) return;
+    setIsRunning(true);
+    workerRef.current.postMessage({ type: 'TRACE', code });
+  }, [isReady, isRunning]);
+
   const stopCode = useCallback(() => {
     if (workerRef.current) {
       workerRef.current.terminate();
@@ -80,6 +90,7 @@ export function usePyodide({ onStdout, onStderr, onReady, onFinish, onError } = 
     isReady,
     isRunning,
     runCode,
+    runTrace,
     stopCode
   };
 }

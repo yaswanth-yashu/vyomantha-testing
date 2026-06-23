@@ -44,5 +44,80 @@ self.onmessage = async function (event) {
       postMessage({ type: 'STDERR', content: error.message + '\n' });
       postMessage({ type: 'FINISH' });
     }
+  } else if (type === 'TRACE') {
+    if (!pyodide) {
+      postMessage({ type: 'ERROR', message: 'Environment is not initialized yet.' });
+      return;
+    }
+
+    try {
+      const traceRunner = `
+import sys
+import json
+
+def serialize_val(val):
+    try:
+        json.dumps(val)
+        return val
+    except:
+        if isinstance(val, (set, tuple)):
+            return [serialize_val(x) for x in val]
+        elif isinstance(val, list):
+            return [serialize_val(x) for x in val]
+        elif isinstance(val, dict):
+            return {str(k): serialize_val(v) for k, v in val.items()}
+        else:
+            return str(val)
+
+def trace_code(code_string):
+    trace_data = []
+    step_counter = 0
+
+    def trace_lines(frame, event, arg):
+        nonlocal step_counter
+        if frame.f_code.co_filename == '<string>':
+            if event in ('line', 'return'):
+                step_counter += 1
+                if step_counter > 500:
+                    raise Exception("Trace limit exceeded (max 500 steps) to prevent infinite loops.")
+                
+                local_vars = {}
+                for k, v in frame.f_locals.items():
+                    if not k.startswith('__') and k != 'trace_code' and k != 'trace_lines' and k != 'serialize_val':
+                        local_vars[k] = serialize_val(v)
+                
+                trace_data.append({
+                    "step": step_counter,
+                    "line": frame.f_lineno,
+                    "variables": local_vars,
+                    "event": event
+                })
+        return trace_lines
+
+    globals_dict = {}
+    locals_dict = {}
+    
+    sys.settrace(trace_lines)
+    try:
+        exec(code_string, globals_dict, locals_dict)
+    except Exception as e:
+        trace_data.append({
+            "step": step_counter + 1,
+            "line": 0,
+            "error": str(e),
+            "variables": {}
+        })
+    finally:
+        sys.settrace(None)
+        
+    return json.dumps(trace_data)
+`;
+      await pyodide.runPythonAsync(traceRunner);
+      pyodide.globals.set("user_code_str", code);
+      const jsonResult = await pyodide.runPythonAsync("trace_code(user_code_str)");
+      postMessage({ type: 'TRACE_RESULT', content: JSON.parse(jsonResult) });
+    } catch (error) {
+      postMessage({ type: 'ERROR', message: error.message });
+    }
   }
 };
