@@ -145,6 +145,22 @@ export async function getCourses() {
 
   if (FRAPPE_URL) {
     try {
+      const list = await frappeGet("lms.lms.api.get_courses_optimized");
+      if (list && Array.isArray(list) && !list.error) {
+        if (typeof window !== 'undefined' && locallyDeleted.length > 0) {
+          const activeIds = new Set(list.map(c => c.id));
+          const cleaned = locallyDeleted.filter(id => !activeIds.has(id));
+          if (cleaned.length !== locallyDeleted.length) {
+            localStorage.setItem('locally_deleted_courses', JSON.stringify(cleaned));
+          }
+        }
+        return list;
+      }
+    } catch (e) {
+      console.warn("Failed to fetch optimized courses, falling back to legacy REST API.", e);
+    }
+
+    try {
       // Fetch LMS Courses and Enrollments from Frappe in parallel
       const [courses, enrollments] = await Promise.all([
         frappeRestGet("LMS Course", {
@@ -421,6 +437,15 @@ export async function deleteCourse(id) {
  */
 export async function getCourseSyllabus(courseId) {
   if (FRAPPE_URL) {
+    try {
+      const syllabus = await frappeGet("lms.lms.api.get_course_syllabus_optimized", { course_id: courseId });
+      if (syllabus && !syllabus.error) {
+        return syllabus;
+      }
+    } catch (e) {
+      console.warn("Failed to fetch optimized syllabus, falling back to legacy REST API.", e);
+    }
+
     try {
       // 1. Fetch the main Course document to read its chapters child table
       const courseDoc = await frappeRestGet(`LMS Course/${courseId}`);

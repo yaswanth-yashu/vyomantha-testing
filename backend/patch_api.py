@@ -12,7 +12,7 @@ def main():
         content = f.read()
 
     # Clean out any old definitions of our custom functions to avoid duplicates
-    for func_name in ['get_google_auth_url', 'test_google_auth_traceback', 'get_api_file', 'execute_py']:
+    for func_name in ['get_google_auth_url', 'test_google_auth_traceback', 'get_api_file', 'execute_py', 'get_courses_optimized', 'get_course_syllabus_optimized']:
         if func_name in content:
             print(f"Found existing {func_name}. Stripping old definition...")
             content = content.split('def ' + func_name)[0]
@@ -126,6 +126,134 @@ def execute_py(code: str):
         return {
             "output": redirected_output.getvalue(),
             "result": str(loc.get("result", ""))
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+@frappe.whitelist(allow_guest=True)
+def get_courses_optimized():
+    import frappe
+    try:
+        courses = frappe.get_all("LMS Course", 
+                                 fields=["name", "title", "published", "creation", "category", "short_introduction", "lessons"],
+                                 limit_page_length=100)
+        
+        enrollment_counts = {}
+        try:
+            counts = frappe.db.sql("""
+                select course, count(name) as count
+                from `tabLMS Enrollment`
+                group by course
+            """, as_dict=True)
+            for row in counts:
+                enrollment_counts[row["course"]] = row["count"]
+        except Exception:
+            pass
+            
+        mapped = []
+        for c in courses:
+            mapped.append({
+                "id": c.name,
+                "title": c.title,
+                "instructor": "Administrator",
+                "category": c.category or "Web Development",
+                "tagline": c.short_introduction or "Learn the basics and get started.",
+                "lessonsCount": c.lessons or 0,
+                "enrolled": enrollment_counts.get(c.name, 0),
+                "status": "Published" if c.published else "Draft",
+                "date": c.creation.strftime("%b %d, %Y") if c.creation else ""
+            })
+        return mapped
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+@frappe.whitelist(allow_guest=True)
+def get_course_syllabus_optimized(course_id: str):
+    import frappe
+    import json
+    try:
+        course = frappe.get_doc("LMS Course", course_id)
+        
+        modules = []
+        chapter_names = [ch.chapter for ch in course.chapters or [] if ch.chapter]
+        if chapter_names:
+            chapters = [frappe.get_doc("Course Chapter", name) for name in chapter_names]
+            
+            lesson_names = []
+            for ch in chapters:
+                for l_ref in ch.lessons or []:
+                    if l_ref.lesson:
+                        lesson_names.append(l_ref.lesson)
+                        
+            lessons_by_name = {}
+            if lesson_names:
+                lessons_list = frappe.get_all("Course Lesson", 
+                                             filters={"name": ["in", lesson_names]},
+                                             fields=["name", "title", "duration", "youtube", "body", "instructor_notes"])
+                lessons_by_name = {l["name"]: l for l in lessons_list}
+                
+            for ch in chapters:
+                lessons = []
+                for l_ref in ch.lessons or []:
+                    l_name = l_ref.lesson
+                    if l_name in lessons_by_name:
+                        lDoc = lessons_by_name[l_name]
+                        
+                        pts = ["Key concept introduction."]
+                        quiz_questions = []
+                        notes = lDoc.get("instructor_notes")
+                        if notes:
+                            try:
+                                meta = json.loads(notes)
+                                if isinstance(meta, dict):
+                                    if isinstance(meta.get("pts"), list):
+                                        pts = meta["pts"]
+                                    if isinstance(meta.get("quizQuestions"), list):
+                                        quiz_questions = meta["quizQuestions"]
+                            except Exception:
+                                pass
+                                
+                        lessons.append({
+                            "id": lDoc["name"],
+                            "title": lDoc["title"],
+                            "dur": lDoc.get("duration") or "10 min",
+                            "vid": lDoc.get("youtube") or "rfscVS0vtbw",
+                            "overview": lDoc.get("body") or "",
+                            "pts": pts,
+                            "quizQuestions": quiz_questions
+                        })
+                    elif l_name:
+                        lessons.append({
+                            "id": l_name,
+                            "title": "Untitled Lesson",
+                            "dur": "10 min",
+                            "vid": "",
+                            "overview": "",
+                            "pts": [],
+                            "quizQuestions": []
+                        })
+                        
+                modules.append({
+                    "id": ch.name,
+                    "title": ch.title,
+                    "emoji": "📖",
+                    "accent": "#5B8CF8",
+                    "lessons": lessons
+                })
+                
+        return {
+            "id": course_id,
+            "title": course.title,
+            "tagline": course.short_introduction or "",
+            "modules": modules
         }
     except Exception as e:
         import traceback
