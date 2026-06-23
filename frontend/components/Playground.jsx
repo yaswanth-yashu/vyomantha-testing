@@ -57,6 +57,7 @@ export default function Playground({ initialCode = '# Write your Python code her
   // Initialize terminal
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const isUnmounted = { current: false };
 
     const term = new Terminal({
       cursorBlink: true,
@@ -81,6 +82,7 @@ export default function Playground({ initialCode = '# Write your Python code her
 
     // Bulletproof terminal fitting using ResizeObserver
     const resizeObserver = new ResizeObserver((entries) => {
+      if (isUnmounted.current) return;
       for (let entry of entries) {
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0) {
@@ -98,8 +100,11 @@ export default function Playground({ initialCode = '# Write your Python code her
     }
 
     return () => {
+      isUnmounted.current = true;
       resizeObserver.disconnect();
       term.dispose();
+      terminalInstanceRef.current = null;
+      fitAddonRef.current = null;
     };
   }, []);
 

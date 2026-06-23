@@ -12,11 +12,14 @@ const Playground = dynamic(() => import('./Playground'), { ssr: false });
 
 export default function CoursePage() {
   const isMobile = useMediaQuery(isMobileMQ);
+  const isTabletOrSmallDesktop = useMediaQuery('(max-width: 1150px)');
   const rPad = isMobile ? 16 : 36;
   const [isPlaygroundOpen, setIsPlaygroundOpen] = useState(false);
 
   const outerStyle = isPlaygroundOpen && !isMobile
-    ? { padding: '32px 24px', display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 28, fontFamily: 'var(--font-outfit), sans-serif', width: '100%', maxWidth: '100%' }
+    ? (isTabletOrSmallDesktop
+        ? { padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 28, fontFamily: 'var(--font-outfit), sans-serif', width: '100%' }
+        : { padding: '32px 24px', display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 28, fontFamily: 'var(--font-outfit), sans-serif', width: '100%', maxWidth: '100%' })
     : { padding: isMobile ? '20px 16px' : '32px 36px', fontFamily: 'var(--font-outfit), sans-serif' };
 
   const [courses, setCourses] = useState([]);
@@ -427,9 +430,14 @@ export default function CoursePage() {
               <Playground initialCode={`# Practice for: ${selectedCourse.title}\n# Write your code here\n\n`} />
             </div>
           )}
+          {isPlaygroundOpen && !isMobile && isTabletOrSmallDesktop && (
+            <div style={{ marginTop: 32, height: 500 }}>
+              <Playground initialCode={`# Practice for: ${selectedCourse.title}\n# Write your code here\n\n`} />
+            </div>
+          )}
         </div>
 
-        {isPlaygroundOpen && !isMobile && (
+        {isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop && (
           <div style={{ position: 'sticky', top: 32, height: 'calc(100vh - 64px)', minHeight: 500 }}>
             <Playground initialCode={`# Practice for: ${selectedCourse.title}\n# Write your code here\n\n`} />
           </div>
@@ -594,9 +602,14 @@ export default function CoursePage() {
             <Playground initialCode={`# General Coding Playground\n# Write your code here\n\n`} />
           </div>
         )}
+        {isPlaygroundOpen && !isMobile && isTabletOrSmallDesktop && (
+          <div style={{ marginTop: 32, height: 500 }}>
+            <Playground initialCode={`# General Coding Playground\n# Write your code here\n\n`} />
+          </div>
+        )}
       </div>
 
-      {isPlaygroundOpen && !isMobile && (
+      {isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop && (
         <div style={{ position: 'sticky', top: 32, height: 'calc(100vh - 64px)', minHeight: 500 }}>
           <Playground initialCode={`# General Coding Playground\n# Write your code here\n\n`} />
         </div>

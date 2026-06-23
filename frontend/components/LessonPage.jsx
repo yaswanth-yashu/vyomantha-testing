@@ -27,6 +27,7 @@ export default function LessonPage({ lesson, completed = {}, onComplete }) {
   // System states
   const [currentUser, setCurrentUser] = useState(null);
   const isMobile = useMediaQuery(isMobileMQ);
+  const isTabletOrSmallDesktop = useMediaQuery('(max-width: 1150px)');
   const rPad = isMobile ? 16 : 36;
 
   // AI Practice Quiz states
@@ -239,7 +240,9 @@ export default function LessonPage({ lesson, completed = {}, onComplete }) {
   };
 
   const outerStyle = isPlaygroundOpen && !isMobile
-    ? { padding: '32px 24px', display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 28, fontFamily: 'var(--font-outfit), sans-serif', width: '100%', maxWidth: '100%' }
+    ? (isTabletOrSmallDesktop
+        ? { padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 28, fontFamily: 'var(--font-outfit), sans-serif', width: '100%' }
+        : { padding: '32px 24px', display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 28, fontFamily: 'var(--font-outfit), sans-serif', width: '100%', maxWidth: '100%' })
     : { padding: `32px ${rPad}px`, maxWidth: 900, fontFamily: 'var(--font-outfit), sans-serif', margin: '0 auto' };
 
   return (
@@ -772,9 +775,14 @@ export default function LessonPage({ lesson, completed = {}, onComplete }) {
           <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
         </div>
       )}
+      {isPlaygroundOpen && !isMobile && isTabletOrSmallDesktop && (
+        <div style={{ marginTop: 32, height: 500 }}>
+          <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
+        </div>
+      )}
     </div>
 
-    {isPlaygroundOpen && !isMobile && (
+    {isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop && (
       <div style={{ position: 'sticky', top: 32, height: 'calc(100vh - 64px)', minHeight: 500 }}>
         <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
       </div>

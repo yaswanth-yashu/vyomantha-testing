@@ -5,6 +5,12 @@ export function usePyodide({ onStdout, onStderr, onReady, onFinish, onError } = 
   const [isRunning, setIsRunning] = useState(false);
   const workerRef = useRef(null);
 
+  // Keep latest callbacks in ref to prevent recreating initWorker on every render
+  const callbacksRef = useRef({ onStdout, onStderr, onReady, onFinish, onError });
+  useEffect(() => {
+    callbacksRef.current = { onStdout, onStderr, onReady, onFinish, onError };
+  }, [onStdout, onStderr, onReady, onFinish, onError]);
+
   const initWorker = useCallback(() => {
     setIsReady(false);
     setIsRunning(false);
@@ -15,25 +21,26 @@ export function usePyodide({ onStdout, onStderr, onReady, onFinish, onError } = 
 
     worker.onmessage = (event) => {
       const { type, content, message } = event.data;
+      const cb = callbacksRef.current;
 
       switch (type) {
         case 'READY':
           setIsReady(true);
-          if (onReady) onReady();
+          if (cb.onReady) cb.onReady();
           break;
         case 'STDOUT':
-          if (onStdout) onStdout(content);
+          if (cb.onStdout) cb.onStdout(content);
           break;
         case 'STDERR':
-          if (onStderr) onStderr(content);
+          if (cb.onStderr) cb.onStderr(content);
           break;
         case 'FINISH':
           setIsRunning(false);
-          if (onFinish) onFinish();
+          if (cb.onFinish) cb.onFinish();
           break;
         case 'ERROR':
           setIsRunning(false);
-          if (onError) onError(message);
+          if (cb.onError) cb.onError(message);
           break;
         default:
           break;
@@ -42,7 +49,7 @@ export function usePyodide({ onStdout, onStderr, onReady, onFinish, onError } = 
 
     // Trigger Pyodide loading inside the web worker
     worker.postMessage({ type: 'INIT' });
-  }, [onStdout, onStderr, onReady, onFinish, onError]);
+  }, []);
 
   useEffect(() => {
     initWorker();

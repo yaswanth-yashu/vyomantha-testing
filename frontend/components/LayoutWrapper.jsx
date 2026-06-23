@@ -11,6 +11,22 @@ export default function LayoutWrapper({ children }) {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('sidebar_collapsed') === 'true';
+      setSidebarCollapsed(stored);
+    }
+  }, []);
+
+  const handleToggleCollapse = () => {
+    const newState = !sidebarCollapsed;
+    setSidebarCollapsed(newState);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebar_collapsed', String(newState));
+    }
+  };
 
   useEffect(() => {
     // Read the user object synchronously from localStorage
@@ -118,7 +134,11 @@ export default function LayoutWrapper({ children }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', width: '100%' }}>
-      {isAdminRoute ? <AdminSidebar /> : <Sidebar />}
+      {isAdminRoute ? (
+        <AdminSidebar isCollapsed={sidebarCollapsed} onToggleCollapse={handleToggleCollapse} />
+      ) : (
+        <Sidebar isCollapsed={sidebarCollapsed} onToggleCollapse={handleToggleCollapse} />
+      )}
       <div className="sidebar-content-area" style={{ flex: 1, overflowY: 'auto', maxHeight: '100vh' }}>
         {children}
       </div>
