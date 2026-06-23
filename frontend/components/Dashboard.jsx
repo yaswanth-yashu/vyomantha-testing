@@ -20,7 +20,7 @@ export default function Dashboard() {
   const isTablet = useMediaQuery(isTabletMQ);
   
   const rPad = isMobile ? 16 : 36;
-  const statCols = isMobile ? '1fr' : isTablet ? 'repeat(2,1fr)' : 'repeat(3,1fr)';
+  const statCols = isMobile ? '1fr' : 'repeat(2,1fr)';
   const mainGridCols = isMobile ? '1fr' : '2fr 1fr';
   const bottomCols = isMobile ? '1fr' : '1fr 1fr';
 
@@ -235,7 +235,6 @@ export default function Dashboard() {
   const stats = [
     { label: 'Lessons Completed', val: `${completedCount}/${totalLessons}`, sub: `${overallProgressPercent}% done`, color: 'var(--accent)', Icon: CheckCircle },
     { label: 'Enrolled Courses', val: `${enrolledCourses.length}`, sub: 'Active cohort learning', color: 'var(--green)', Icon: BookOpen },
-    { label: 'AI Tools Ready', val: '3', sub: 'General, Coding & Voice Tutor', color: 'var(--purple)', Icon: Brain },
   ];
 
   // Checklist Actions
@@ -307,7 +306,7 @@ export default function Dashboard() {
   const correctAnswerIdx = 1;
 
   return (
-    <div style={{ padding: `32px ${rPad}px`, maxWidth: 1100, fontFamily: 'var(--font-outfit), sans-serif' }}>
+    <div style={{ padding: `32px ${rPad}px`, fontFamily: 'var(--font-outfit), sans-serif' }}>
       
       {/* Dynamic Header & Greeting */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
@@ -437,7 +436,7 @@ export default function Dashboard() {
                   e.currentTarget.style.borderColor = 'var(--border)';
                 }}
                 onClick={() => {
-                  if (label === 'Lessons Completed' || label === 'AI Tools Ready') {
+                  if (label === 'Lessons Completed') {
                     router.push('/progress');
                   } else {
                     router.push('/courses');
