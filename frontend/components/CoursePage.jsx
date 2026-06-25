@@ -459,7 +459,7 @@ export default function CoursePage() {
             <p style={{ color: T.muted, marginTop: 6, fontSize: isMobile ? 14 : 15 }}>
               Study structured paths curated by instructors, powered by Frappe LMS.
             </p>
-          </div>
+          </div>  
 
           <button
             onClick={() => setIsPlaygroundOpen(!isPlaygroundOpen)}

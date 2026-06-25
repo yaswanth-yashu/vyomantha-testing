@@ -536,7 +536,7 @@ export default function Dashboard() {
                   onClick={() => router.push('/courses')}
                   style={{
                     background: 'var(--accent)',
-                    color: '#000',
+                    color: '#faf5f5ff',
                     border: 'none',
                     padding: '10px 20px',
                     borderRadius: 8,

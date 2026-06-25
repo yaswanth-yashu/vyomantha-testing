@@ -160,7 +160,7 @@ export default function ProgressPage({ completed = {} }) {
           <p style={{ color: T.muted, fontSize: 13.5, maxWidth: 360, margin: '0 auto 20px' }}>
             To see your learning progress and KPIs, enroll in a course first.
           </p>
-          <a href="/courses" style={{ background: T.accent, color: '#000', border: 'none', padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, textDecoration: 'none' }}>
+          <a href="/courses" style={{ background: T.accent, color: '#faf7f7ff', border: 'none', padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, textDecoration: 'none' }}>
             Explore Courses
           </a>
         </div>
