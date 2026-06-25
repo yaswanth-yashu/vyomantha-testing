@@ -17,6 +17,7 @@ export default function LoginPage() {
   // Clear any existing session on mount and parse query errors
   useEffect(() => {
     localStorage.removeItem('frappe_user');
+    localStorage.removeItem('frappe_sid');
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const err = params.get('error');

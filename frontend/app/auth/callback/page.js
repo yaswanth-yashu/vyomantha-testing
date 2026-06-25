@@ -17,8 +17,21 @@ export default function AuthCallback() {
       try {
         const frappeUrl = process.env.NEXT_PUBLIC_FRAPPE_URL || 'https://vyomanta.onrender.com';
         
-        // Fetch logged-in user email from backend (credentials: "include" sends the sid cookie)
-        const emailRes = await fetch(`${frappeUrl}/api/method/frappe.auth.get_logged_user`, {
+        // Retrieve sid from search parameters if present (passed via redirect URL parameter)
+        let sid = searchParams.get('sid');
+        if (sid) {
+          localStorage.setItem('frappe_sid', sid);
+        } else {
+          sid = localStorage.getItem('frappe_sid');
+        }
+        
+        // Fetch logged-in user email from backend
+        // We append the sid query parameter to bypass cross-site cookie restrictions
+        const fetchUrl = sid 
+          ? `${frappeUrl}/api/method/frappe.auth.get_logged_user?sid=${encodeURIComponent(sid)}`
+          : `${frappeUrl}/api/method/frappe.auth.get_logged_user`;
+          
+        const emailRes = await fetch(fetchUrl, {
           credentials: 'include'
         });
         
@@ -36,7 +49,11 @@ export default function AuthCallback() {
         setStatus('Retrieving student profile details...');
         
         // Fetch User Doc details
-        const userRes = await fetch(`${frappeUrl}/api/resource/User/${encodeURIComponent(email)}`, {
+        const userFetchUrl = sid
+          ? `${frappeUrl}/api/resource/User/${encodeURIComponent(email)}?sid=${encodeURIComponent(sid)}`
+          : `${frappeUrl}/api/resource/User/${encodeURIComponent(email)}`;
+          
+        const userRes = await fetch(userFetchUrl, {
           credentials: 'include'
         });
         

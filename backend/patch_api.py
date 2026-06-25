@@ -306,7 +306,18 @@ try:
     @frappe.whitelist(allow_guest=True)
     def patched_login_via_google(code: str, state: str, **kwargs):
         try:
-            return orig_login_via_google(code, state)
+            res = orig_login_via_google(code, state)
+            # Intercept successful Google login redirect and append the sid query parameter
+            if frappe.local.response.get("type") == "redirect":
+                location = frappe.local.response.get("location")
+                sid = frappe.session.get("sid") if hasattr(frappe.session, "get") else getattr(frappe.session, "sid", None)
+                if location and sid:
+                    from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+                    parsed = urlparse(location)
+                    query = dict(parse_qsl(parsed.query))
+                    query["sid"] = sid
+                    frappe.local.response["location"] = urlunparse(parsed._replace(query=urlencode(query)))
+            return res
         except Exception as e:
             import traceback
             frappe.log_error(title="Google Login Failed", message=traceback.format_exc())

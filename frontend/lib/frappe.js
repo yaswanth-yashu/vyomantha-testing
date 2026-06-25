@@ -52,7 +52,19 @@ async function handleResponse(res, isRest = true) {
 export async function frappeGet(method, params = {}) {
   if (!FRAPPE_URL) throw new Error("Frappe URL not configured");
   const url = new URL(`${FRAPPE_URL}/api/method/${method}`);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  
+  // Retrieve saved sid to bypass cross-site cookie restrictions
+  let sid = null;
+  if (typeof window !== 'undefined') {
+    sid = localStorage.getItem('frappe_sid');
+  }
+  
+  const mergedParams = { ...params };
+  if (sid && !mergedParams.sid) {
+    mergedParams.sid = sid;
+  }
+  
+  Object.entries(mergedParams).forEach(([k, v]) => url.searchParams.set(k, v));
 
   const res = await fetch(url.toString(), {
     credentials: "include",
@@ -63,7 +75,18 @@ export async function frappeGet(method, params = {}) {
 
 export async function frappePost(method, body = {}) {
   if (!FRAPPE_URL) throw new Error("Frappe URL not configured");
-  const res = await fetch(`${FRAPPE_URL}/api/method/${method}`, {
+  
+  let sid = null;
+  if (typeof window !== 'undefined') {
+    sid = localStorage.getItem('frappe_sid');
+  }
+  
+  const url = new URL(`${FRAPPE_URL}/api/method/${method}`);
+  if (sid) {
+    url.searchParams.set('sid', sid);
+  }
+  
+  const res = await fetch(url.toString(), {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -76,7 +99,18 @@ export async function frappeRestGet(resource, params = {}) {
   if (!FRAPPE_URL) throw new Error("Frappe URL not configured");
   const encodedSegments = resource.split('/').map(segment => encodeURIComponent(segment)).join('/');
   const url = new URL(`${FRAPPE_URL}/api/resource/${encodedSegments}`);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  
+  let sid = null;
+  if (typeof window !== 'undefined') {
+    sid = localStorage.getItem('frappe_sid');
+  }
+  
+  const mergedParams = { ...params };
+  if (sid && !mergedParams.sid) {
+    mergedParams.sid = sid;
+  }
+  
+  Object.entries(mergedParams).forEach(([k, v]) => url.searchParams.set(k, v));
   const res = await fetch(url.toString(), {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -87,7 +121,18 @@ export async function frappeRestGet(resource, params = {}) {
 export async function frappeRestPost(resource, body = {}) {
   if (!FRAPPE_URL) throw new Error("Frappe URL not configured");
   const encodedSegments = resource.split('/').map(segment => encodeURIComponent(segment)).join('/');
-  const res = await fetch(`${FRAPPE_URL}/api/resource/${encodedSegments}`, {
+  
+  let sid = null;
+  if (typeof window !== 'undefined') {
+    sid = localStorage.getItem('frappe_sid');
+  }
+  
+  const url = new URL(`${FRAPPE_URL}/api/resource/${encodedSegments}`);
+  if (sid) {
+    url.searchParams.set('sid', sid);
+  }
+  
+  const res = await fetch(url.toString(), {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -100,7 +145,18 @@ export async function frappeRestPut(resource, name, body = {}) {
   if (!FRAPPE_URL) throw new Error("Frappe URL not configured");
   const encodedResource = resource.split('/').map(segment => encodeURIComponent(segment)).join('/');
   const encodedName = encodeURIComponent(name);
-  const res = await fetch(`${FRAPPE_URL}/api/resource/${encodedResource}/${encodedName}`, {
+  
+  let sid = null;
+  if (typeof window !== 'undefined') {
+    sid = localStorage.getItem('frappe_sid');
+  }
+  
+  const url = new URL(`${FRAPPE_URL}/api/resource/${encodedResource}/${encodedName}`);
+  if (sid) {
+    url.searchParams.set('sid', sid);
+  }
+  
+  const res = await fetch(url.toString(), {
     method: "PUT",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -113,7 +169,18 @@ export async function frappeRestDelete(resource, name) {
   if (!FRAPPE_URL) throw new Error("Frappe URL not configured");
   const encodedResource = resource.split('/').map(segment => encodeURIComponent(segment)).join('/');
   const encodedName = encodeURIComponent(name);
-  const res = await fetch(`${FRAPPE_URL}/api/resource/${encodedResource}/${encodedName}`, {
+  
+  let sid = null;
+  if (typeof window !== 'undefined') {
+    sid = localStorage.getItem('frappe_sid');
+  }
+  
+  const url = new URL(`${FRAPPE_URL}/api/resource/${encodedResource}/${encodedName}`);
+  if (sid) {
+    url.searchParams.set('sid', sid);
+  }
+  
+  const res = await fetch(url.toString(), {
     method: "DELETE",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -725,6 +792,9 @@ export async function login(email, password) {
 
     const data = await res.json();
     if (res.ok && (data.message === "Logged In" || data.message === "No App")) {
+      if (typeof window !== 'undefined' && data.sid) {
+        localStorage.setItem('frappe_sid', data.sid);
+      }
       return {
         email: data.user_id || usr,
         username: data.user_id || usr,

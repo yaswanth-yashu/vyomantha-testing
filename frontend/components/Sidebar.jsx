@@ -79,6 +79,7 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
             Icon: LogOut,
             onClick: () => {
               localStorage.removeItem('frappe_user');
+              localStorage.removeItem('frappe_sid');
               window.location.href = '/login';
             }
           }
