@@ -64,13 +64,15 @@ export default function CodingTutor() {
   const inputRef = useRef(null);
   
   const [codeOverride, setCodeOverride] = useState(null);
+  const [explanationOverride, setExplanationOverride] = useState(null);
 
-  const handleVisualizeCode = (codeText) => {
+  const handleVisualizeCode = (codeText, explanationText) => {
     setIsPlaygroundOpen(true);
     setCodeOverride(codeText);
+    setExplanationOverride(explanationText || '');
   };
 
-  const renderMarkdown = (content) => {
+  const renderMarkdown = (content, explanation = '') => {
     return (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
@@ -87,7 +89,7 @@ export default function CodingTutor() {
                     <code>{children}</code>
                   </pre>
                   <button
-                    onClick={() => handleVisualizeCode(codeVal)}
+                    onClick={() => handleVisualizeCode(codeVal, explanation)}
                     style={{
                       position: 'absolute',
                       top: 8,
@@ -321,7 +323,8 @@ export default function CodingTutor() {
         if (done) break;
         fullText += decoder.decode(value, { stream: true });
         if (streamElRef.current) {
-          streamElRef.current.textContent = fullText;
+          const match = fullText.match(/([\s\S]*?```python[\s\S]*?```)([\s\S]*)/);
+          streamElRef.current.textContent = match ? match[1] : fullText;
         }
       }
       if (!fullText.trim()) {
@@ -608,35 +611,41 @@ export default function CodingTutor() {
               </div>
 
               {/* Chat Thread */}
-              {messages.map((msg, mi) => (
-                <div key={msg.id || mi} style={{ marginBottom: 20 }}>
-                  {/* User Bubble */}
-                  {msg.role === 'user' && (
-                    <div style={{ display: 'flex', gap: rGap, justifyContent: 'flex-end', maxWidth: msgMaxW, marginLeft: 'auto' }}>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.04em', marginBottom: 4 }}>YOU</div>
-                        <div style={{ background: T.s3, border: `1px solid ${T.border}`, borderRadius: '14px 14px 4px 14px', padding: '10px 14px', color: T.text, fontSize: 14, lineHeight: 1.65, maxWidth: bubbleMaxW }}>
-                          {msg.content}
-                        </div>
-                        <div style={{ fontSize: 10, color: T.dim, marginTop: 4 }}>{msg.mode} &middot; {msg.length}</div>
-                      </div>
-                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: T.s3, border: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, color: T.muted, fontWeight: 700 }}>S</div>
-                    </div>
-                  )}
+              {messages.map((msg, mi) => {
+                const isAi = msg.role === 'ai';
+                const match = isAi && msg.content ? msg.content.match(/([\s\S]*?```python[\s\S]*?```)([\s\S]*)/) : null;
+                const chatContent = match ? match[1] : msg.content;
+                const explanation = match ? match[2].trim() : '';
 
-                  {/* AI Bubble */}
-                  {msg.role === 'ai' && (
-                    <div style={{ display: 'flex', gap: rGap, maxWidth: msgMaxW }}>
-                      <div style={{ width: isMobile ? 30 : 36, height: isMobile ? 30 : 36, borderRadius: '50%', background: `${T.amber}25`, border: `1px solid ${T.amber}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Code2 size={isMobile ? 14 : 16} color={T.amber} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: T.amber, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 4 }}>CODING TUTOR</div>
-                        <div style={{ color: T.text, fontSize: 14, lineHeight: 1.7 }}>
-                          <div className="md-content">
-                            {renderMarkdown(msg.content)}
+                return (
+                  <div key={msg.id || mi} style={{ marginBottom: 20 }}>
+                    {/* User Bubble */}
+                    {msg.role === 'user' && (
+                      <div style={{ display: 'flex', gap: rGap, justifyContent: 'flex-end', maxWidth: msgMaxW, marginLeft: 'auto' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.04em', marginBottom: 4 }}>YOU</div>
+                          <div style={{ background: T.s3, border: `1px solid ${T.border}`, borderRadius: '14px 14px 4px 14px', padding: '10px 14px', color: T.text, fontSize: 14, lineHeight: 1.65, maxWidth: bubbleMaxW }}>
+                            {msg.content}
                           </div>
+                          <div style={{ fontSize: 10, color: T.dim, marginTop: 4 }}>{msg.mode} &middot; {msg.length}</div>
                         </div>
+                        <div style={{ width: 34, height: 34, borderRadius: '50%', background: T.s3, border: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, color: T.muted, fontWeight: 700 }}>S</div>
+                      </div>
+                    )}
+
+                    {/* AI Bubble */}
+                    {msg.role === 'ai' && (
+                      <div style={{ display: 'flex', gap: rGap, maxWidth: msgMaxW }}>
+                        <div style={{ width: isMobile ? 30 : 36, height: isMobile ? 30 : 36, borderRadius: '50%', background: `${T.amber}25`, border: `1px solid ${T.amber}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Code2 size={isMobile ? 14 : 16} color={T.amber} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, color: T.amber, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 4 }}>CODING TUTOR</div>
+                          <div style={{ color: T.text, fontSize: 14, lineHeight: 1.7 }}>
+                            <div className="md-content">
+                              {renderMarkdown(chatContent, explanation)}
+                            </div>
+                          </div>
 
                         {/* On-Demand Feature Outputs */}
                         {msg.features?.quiz?.questions?.length > 0 && (
@@ -829,7 +838,8 @@ export default function CodingTutor() {
                     </div>
                   )}
                 </div>
-              ))}
+              );
+            })}
 
               {/* Streaming Area */}
               {streamingText && (
@@ -919,7 +929,11 @@ export default function CodingTutor() {
               <Playground 
                 initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} 
                 codeOverride={codeOverride}
-                onTraceComplete={() => setCodeOverride(null)}
+                explanationOverride={explanationOverride}
+                onTraceComplete={() => {
+                  setCodeOverride(null);
+                  setExplanationOverride(null);
+                }}
               />
             </div>
           )}
@@ -930,7 +944,11 @@ export default function CodingTutor() {
               <Playground 
                 initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} 
                 codeOverride={codeOverride}
-                onTraceComplete={() => setCodeOverride(null)}
+                explanationOverride={explanationOverride}
+                onTraceComplete={() => {
+                  setCodeOverride(null);
+                  setExplanationOverride(null);
+                }}
               />
             </div>
           )}

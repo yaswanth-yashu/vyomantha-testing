@@ -4,18 +4,28 @@ import { useState, useEffect, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { usePyodide } from '@/hooks/usePyodide';
-import { Play, Square, Trash2, CheckCircle, Loader2, Sparkles, ChevronLeft, ChevronRight, Pause } from 'lucide-react';
+import { Play, Square, Trash2, CheckCircle, Loader2, Sparkles, ChevronLeft, ChevronRight, Pause, BookOpen } from 'lucide-react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function Playground({
   initialCode = '# Write your Python code here\nprint("Hello World!")\n',
   codeOverride = null,
+  explanationOverride = null,
   onTraceComplete = null
 }) {
   const [code, setCode] = useState(initialCode);
   const [activeTab, setActiveTab] = useState('console');
+  const [explanation, setExplanation] = useState('');
+
+  useEffect(() => {
+    if (explanationOverride !== null) {
+      setExplanation(explanationOverride);
+    }
+  }, [explanationOverride]);
   
   // Trace visualizer states
   const [traceData, setTraceData] = useState(null);
@@ -509,6 +519,30 @@ export default function Playground({
             <Sparkles size={11} color={traceData ? 'var(--amber)' : 'currentColor'} />
             Visualizer {traceData ? `(${traceData.length} Steps)` : ''}
           </button>
+          <button
+            onClick={() => setActiveTab('explanation')}
+            style={{
+              background: activeTab === 'explanation' ? 'var(--s3)' : 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'explanation' ? `2px solid var(--green)` : 'none',
+              color: activeTab === 'explanation' ? 'var(--text)' : 'var(--muted)',
+              padding: '6px 16px',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              fontFamily: 'inherit',
+              outline: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              transition: 'all 0.15s'
+            }}
+          >
+            <BookOpen size={11} color={explanation ? 'var(--green)' : 'currentColor'} />
+            Explanation
+          </button>
         </div>
 
         {/* Tab Content Area */}
@@ -677,6 +711,32 @@ export default function Playground({
               </div>
             )}
 
+          </div>
+
+          {/* Explanation Tab Content */}
+          <div style={{
+            display: activeTab === 'explanation' ? 'block' : 'none',
+            width: '100%',
+            height: '100%',
+            padding: 16,
+            overflowY: 'auto',
+            background: '#07080F',
+            color: 'var(--text)'
+          }}>
+            {!explanation ? (
+              <div style={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px', textAlign: 'center', color: 'var(--muted)', gap: 8 }}>
+                <BookOpen size={24} color="var(--green)" />
+                <span style={{ fontSize: 13, maxWidth: 360 }}>
+                  No active explanation loaded. Click <strong>Visualize Code</strong> in the chatbot below to view the explanation here!
+                </span>
+              </div>
+            ) : (
+              <div className="md-content" style={{ fontSize: 14, lineHeight: 1.7 }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {explanation}
+                </ReactMarkdown>
+              </div>
+            )}
           </div>
 
           {/* Console Clear Button (when Console tab is active) */}
