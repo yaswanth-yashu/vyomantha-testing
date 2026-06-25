@@ -546,7 +546,7 @@ export default function Playground({
         </div>
 
         {/* Tab Content Area */}
-        <div style={{ flex: 0.9, position: 'relative', overflow: 'hidden', background: '#090A0F' }}>
+        <div style={{ flex: 0.9, position: 'relative', overflow: 'hidden', background: 'var(--s1)' }}>
           
           {/* Console Tab Content */}
           <div
@@ -556,7 +556,8 @@ export default function Playground({
               width: '100%',
               height: '100%',
               padding: '8px 12px',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              background: '#090A0F'
             }}
           />
 
@@ -665,7 +666,7 @@ export default function Playground({
                       borderRight: `1px solid var(--border)`,
                       overflowY: 'auto',
                       padding: '8px 0',
-                      background: '#090A0F'
+                      background: 'var(--s1)'
                     }}
                   >
                     {code.split('\n').map((line, idx) => {
@@ -700,7 +701,7 @@ export default function Playground({
                     flex: 0.5,
                     overflowY: 'auto',
                     padding: 14,
-                    background: '#07080F'
+                    background: 'var(--s1)'
                   }}>
                     <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 10 }}>Local Variables Scope</div>
                     {renderVariables()}
@@ -720,7 +721,7 @@ export default function Playground({
             height: '100%',
             padding: 16,
             overflowY: 'auto',
-            background: '#07080F',
+            background: 'var(--s1)',
             color: 'var(--text)'
           }}>
             {!explanation ? (

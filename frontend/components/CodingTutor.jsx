@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import CodeMirror from '@uiw/react-codemirror';
+import { python } from '@codemirror/lang-python';
 import {
   Code2, Loader2, ChevronRight, Lock, FlipHorizontal,
   Paperclip, Mic, Image, HelpCircle, Send, AlignLeft, Sparkles, ChevronLeft,
@@ -46,6 +48,11 @@ const FEATURE_LABELS = {
 };
 
 export default function CodingTutor() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState('Beginner');
   const [length, setLength] = useState('Medium');
@@ -85,9 +92,26 @@ export default function CodingTutor() {
             if (!inline && isPython) {
               return (
                 <div style={{ position: 'relative', margin: '12px 0' }}>
-                  <pre className={className} {...props} style={{ margin: 0 }}>
-                    <code>{children}</code>
-                  </pre>
+                  {mounted ? (
+                    <CodeMirror
+                      value={codeVal}
+                      theme="dark"
+                      extensions={[python()]}
+                      readOnly
+                      editable={false}
+                      basicSetup={{
+                        lineNumbers: false,
+                        foldGutter: false,
+                        highlightActiveLine: false,
+                        highlightActiveLineGutter: false,
+                      }}
+                      style={{ fontSize: 13, fontFamily: 'monospace', borderRadius: 8, overflow: 'hidden' }}
+                    />
+                  ) : (
+                    <pre className={className} {...props} style={{ margin: 0 }}>
+                      <code>{children}</code>
+                    </pre>
+                  )}
                   <button
                     onClick={() => handleVisualizeCode(codeVal, explanation)}
                     style={{
@@ -961,9 +985,9 @@ export default function CodingTutor() {
         .md-content p:last-child { margin: 0; }
         .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
         .md-content li { margin: 0.2em 0; }
-        .md-content strong { color: #DDE3F2; font-weight: 700; }
+        .md-content strong { color: var(--text); font-weight: 700; }
         .md-content em { color: #F5A95B; font-style: italic; }
-        .md-content code { background: #182033; padding: 1px 5px; border-radius: 4px; font-size: 13px; color: #F5A95B; }
+        .md-content code { background: var(--s3); padding: 1px 5px; border-radius: 4px; font-size: 13px; color: #F5A95B; }
         .md-content pre { background: #0C0F1C; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 0.6em 0; border: 1px solid rgba(255,255,255,0.07); }
         .md-content pre code { background: none; padding: 0; color: #DDE3F2; }
         .md-content table { border-collapse: collapse; margin: 0.6em 0; }
