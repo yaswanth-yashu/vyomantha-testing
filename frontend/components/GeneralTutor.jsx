@@ -17,7 +17,6 @@ import {
   MAX_TOKENS
 } from '@/lib/lms-data';
 import VoiceAgentView from '@/components/voice-tutor/VoiceAgentView';
-import UnifiedSidebar from '@/components/voice-tutor/UnifiedSidebar';
 import MobileNav from '@/components/MobileNav';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 
@@ -98,6 +97,28 @@ export default function GeneralTutor() {
     } catch {}
   }, []);
 
+  // Save currentSessionId to localStorage
+  useEffect(() => {
+    if (currentSessionId) {
+      localStorage.setItem('current-general-tutor-session-id', currentSessionId);
+    } else {
+      localStorage.removeItem('current-general-tutor-session-id');
+    }
+  }, [currentSessionId]);
+
+  // Synchronize state with Sidebar.jsx
+  useEffect(() => {
+    const event = new CustomEvent('tutor-state-update', {
+      detail: {
+        currentSessionId,
+        textSessions,
+        voiceSessions,
+        type: 'general-tutor'
+      }
+    });
+    window.dispatchEvent(event);
+  }, [currentSessionId, textSessions, voiceSessions]);
+
   const mergedSessions = useMemo(() => {
     const text = (textSessions || []).map(s => ({ ...s, type: 'text' }));
     const voice = (voiceSessions || []).map(s => ({ ...s, type: 'voice' }));
@@ -130,6 +151,28 @@ export default function GeneralTutor() {
     setCurrentSessionId(session.id);
     setErr(''); setTopic('');
   }, []);
+
+  // Listen to events from the sidebar
+  useEffect(() => {
+    const handleSelect = (e) => {
+      handleSelectSession(e.detail);
+    };
+
+    const handleNew = () => {
+      setMessages([]);
+      setCurrentSessionId(null);
+      setTopic('');
+      setErr('');
+    };
+
+    window.addEventListener('select-general-tutor-session', handleSelect);
+    window.addEventListener('new-general-tutor-session', handleNew);
+
+    return () => {
+      window.removeEventListener('select-general-tutor-session', handleSelect);
+      window.removeEventListener('new-general-tutor-session', handleNew);
+    };
+  }, [handleSelectSession]);
 
   const saveSession = useCallback((msgs, overrideSid) => {
     if (!msgs.some(m => m.role === 'ai')) return;
@@ -454,14 +497,6 @@ export default function GeneralTutor() {
     <>
       <MobileNav title="General Tutor" accent={T.purple} items={tutorNavItems} extras={tutorExtras} />
       <div style={{ display: 'flex', height: '100vh', background: T.bg, overflow: 'hidden' }}>
-        {!isMobile && (
-          <UnifiedSidebar
-            sessions={mergedSessions}
-            onSelectSession={handleSelectSession}
-            currentSessionId={currentSessionId}
-            showMenuButton={false}
-          />
-        )}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* ── HEADER ── */}

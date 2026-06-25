@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   BookOpen, Brain, Code2, BarChart3, Home, Zap, LogOut, Briefcase, Award, FileText, FolderOpen, Sun, Moon,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ChevronDown, Plus
 } from 'lucide-react';
 import { T, getTheme, setTheme } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
@@ -27,8 +27,13 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
   const router   = useRouter();
   const isMobile = useMediaQuery(isMobileMQ);
   const isGeneralTutor = pathname.startsWith('/general-tutor');
+  const isCodingTutor = pathname.startsWith('/coding-tutor');
+  const isTutorPage = isGeneralTutor || isCodingTutor;
 
   const [user, setUser] = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -46,18 +51,116 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
 
+  // Group date labels for history
+  function getDateLabel(dateStr) {
+    if (!dateStr) return 'Older';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekStart = new Date(today);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    if (date >= today) return 'Today';
+    if (date >= yesterday) return 'Yesterday';
+    if (date >= weekStart) return 'This Week';
+    return 'Older';
+  }
+
+  // Load tutor session history initially or on route changes
+  const loadTutorSessions = () => {
+    if (!isTutorPage) return;
+    const textKey = isGeneralTutor ? 'general-tutor-sessions' : 'coding-tutor-sessions';
+    const voiceKey = isGeneralTutor ? 'voice-tutor-sessions' : 'voice-coding-tutor-sessions';
+    const activeKey = isGeneralTutor ? 'current-general-tutor-session-id' : 'current-coding-tutor-session-id';
+
+    try {
+      const rawText = localStorage.getItem(textKey);
+      const rawVoice = localStorage.getItem(voiceKey);
+      const textSess = rawText ? JSON.parse(rawText) : [];
+      const voiceSess = rawVoice ? JSON.parse(rawVoice) : [];
+
+      const text = textSess.map(s => ({ ...s, type: 'text' }));
+      const voice = voiceSess.map(s => ({ ...s, type: 'voice' }));
+      const all = [...text, ...voice];
+      all.sort((a, b) => {
+        const ta = new Date(a.timestamp || a.startedAt || 0).getTime();
+        const tb = new Date(b.timestamp || b.startedAt || 0).getTime();
+        return tb - ta;
+      });
+      setSessions(all);
+
+      const activeId = localStorage.getItem(activeKey);
+      setCurrentSessionId(activeId);
+    } catch (e) {
+      console.error('Error loading sessions in Sidebar:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadTutorSessions();
+    setDropdownOpen(false); // Reset dropdown on navigate
+  }, [pathname]);
+
+  // Synchronize tutor state on custom event update from GeneralTutor / CodingTutor
+  useEffect(() => {
+    const handleStateUpdate = (e) => {
+      const { currentSessionId: eventSid, textSessions, voiceSessions, type } = e.detail;
+      const expectedType = isGeneralTutor ? 'general-tutor' : 'coding-tutor';
+      if (type !== expectedType) return;
+
+      const text = (textSessions || []).map(s => ({ ...s, type: 'text' }));
+      const voice = (voiceSessions || []).map(s => ({ ...s, type: 'voice' }));
+      const all = [...text, ...voice];
+      all.sort((a, b) => {
+        const ta = new Date(a.timestamp || a.startedAt || 0).getTime();
+        const tb = new Date(b.timestamp || b.startedAt || 0).getTime();
+        return tb - ta;
+      });
+      setSessions(all);
+      setCurrentSessionId(eventSid);
+    };
+
+    window.addEventListener('tutor-state-update', handleStateUpdate);
+    return () => {
+      window.removeEventListener('tutor-state-update', handleStateUpdate);
+    };
+  }, [isGeneralTutor, isCodingTutor]);
+
+  const handleSelectSession = (session) => {
+    const eventName = isGeneralTutor ? 'select-general-tutor-session' : 'select-coding-tutor-session';
+    window.dispatchEvent(new CustomEvent(eventName, { detail: session }));
+  };
+
+  const handleNewSession = () => {
+    const eventName = isGeneralTutor ? 'new-general-tutor-session' : 'new-coding-tutor-session';
+    window.dispatchEvent(new Event(eventName));
+  };
+
+  const groupedSessions = useMemo(() => {
+    const groups = {};
+    for (const session of sessions) {
+      const label = getDateLabel(session.timestamp || session.startedAt);
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(session);
+    }
+    return groups;
+  }, [sessions]);
+
+  const orderedGroups = ['Today', 'Yesterday', 'This Week', 'Older'];
+
   // Inject padding so content clears the fixed MobileNav top bar
   useEffect(() => {
-    if (isMobile && !isGeneralTutor) {
+    if (isMobile && !isTutorPage) {
       const el = document.createElement('style');
       el.id = 'sidebar-mobile-pad';
       el.textContent = '.sidebar-content-area { padding-top: 48px !important; }';
       document.head.appendChild(el);
       return () => { document.getElementById('sidebar-mobile-pad')?.remove(); };
     }
-  }, [isMobile, isGeneralTutor]);
+  }, [isMobile, isTutorPage]);
 
-  if (isGeneralTutor) return null;
+  if (isMobile && isTutorPage) return null;
 
   const isActive = (navId) => {
     if (navId === '/') return pathname === '/';
@@ -189,37 +292,334 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
       </div>
 
       {/* Nav Menu */}
-      <div style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', alignItems: isCollapsed ? 'center' : 'stretch' }}>
-        {NAV.map(({ id, Icon, label }) => {
-          const active = isActive(id);
-          return (
-            <button key={id} onClick={() => router.push(id)} style={{
-              width: isCollapsed ? 42 : '100%',
-              height: isCollapsed ? 42 : 'auto',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: isCollapsed ? 'center' : 'flex-start',
-              gap: isCollapsed ? 0 : 11,
-              padding: isCollapsed ? '0' : '10px 13px',
-              borderRadius: 9,
-              marginBottom: 3,
-              background: active ? `${T.accent}18` : 'transparent',
-              border: active ? `1px solid ${T.accent}30` : '1px solid transparent',
-              color: active ? T.accent : T.muted,
-              cursor: 'pointer',
-              fontSize: 13.5,
-              fontWeight: active ? 600 : 400,
-              letterSpacing: '-0.01em',
-              transition: 'all 0.15s',
-              fontFamily: 'inherit',
-            }}
-            title={isCollapsed ? label : ""}
-            >
-              <Icon size={16} />
-              {!isCollapsed && label}
-            </button>
-          );
-        })}
+      <div style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', alignItems: isCollapsed ? 'center' : 'stretch', overflow: 'hidden' }}>
+        {isTutorPage ? (
+          <>
+            {isCollapsed ? (
+              <button
+                onClick={onToggleCollapse}
+                style={{
+                  width: 42,
+                  height: 42,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 9,
+                  background: `${T.accent}18`,
+                  border: `1px solid ${T.accent}30`,
+                  color: T.accent,
+                  cursor: 'pointer',
+                  marginBottom: 10,
+                  transition: 'all 0.2s',
+                }}
+                title={`Expand for ${isGeneralTutor ? 'General Tutor' : 'Coding Tutor'}`}
+              >
+                {isGeneralTutor ? <Brain size={16} /> : <Code2 size={16} />}
+              </button>
+            ) : (
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 13px',
+                  borderRadius: 9,
+                  background: `${T.accent}12`,
+                  border: `1px solid ${T.accent}30`,
+                  color: T.accent,
+                  cursor: 'pointer',
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  letterSpacing: '-0.01em',
+                  transition: 'all 0.2s',
+                  fontFamily: 'inherit',
+                  marginBottom: dropdownOpen ? 4 : 8,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                  {isGeneralTutor ? <Brain size={16} /> : <Code2 size={16} />}
+                  <span>{isGeneralTutor ? 'General Tutor' : 'Coding Tutor'}</span>
+                </div>
+                <ChevronDown
+                  size={14}
+                  style={{
+                    transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                />
+              </button>
+            )}
+
+            {/* Dropdown Items (Animate height & opacity) */}
+            {!isCollapsed && (
+              <div style={{
+                maxHeight: dropdownOpen ? '420px' : '0px',
+                opacity: dropdownOpen ? 1 : 0,
+                overflow: 'hidden',
+                transition: 'max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, margin 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                marginTop: dropdownOpen ? 4 : 0,
+                marginBottom: dropdownOpen ? 12 : 0,
+                paddingBottom: dropdownOpen ? 12 : 0,
+                borderBottom: dropdownOpen ? `1px solid ${T.border}` : 'none'
+              }}>
+                {NAV.map(({ id, Icon, label }) => {
+                  const active = isActive(id);
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        router.push(id);
+                        setDropdownOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 11,
+                        padding: '9px 13px',
+                        borderRadius: 8,
+                        background: active ? `${T.accent}12` : 'transparent',
+                        border: 'none',
+                        color: active ? T.accent : T.muted,
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: active ? 600 : 400,
+                        textAlign: 'left',
+                        fontFamily: 'inherit',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={e => { if (!active) e.currentTarget.style.background = T.s2; }}
+                      onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <Icon size={15} />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Tutor Session History */}
+            {isCollapsed ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', marginTop: 16 }}>
+                <button
+                  onClick={handleNewSession}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: `1px dashed ${T.border}`,
+                    background: 'transparent',
+                    color: T.muted,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  title="New Chat"
+                >
+                  <Plus size={14} />
+                </button>
+                {sessions.map((session) => {
+                  const isActive = session.id === currentSessionId;
+                  const isVoice = session.type === 'voice';
+                  return (
+                    <button
+                      key={session.type + '-' + session.id}
+                      onClick={() => handleSelectSession(session)}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        border: 'none',
+                        background: isActive ? `${T.accent}15` : 'transparent',
+                        color: isActive ? T.text : T.muted,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.15s',
+                      }}
+                      title={session.label || 'Untitled'}
+                    >
+                      <span style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 6,
+                        background: isVoice ? `${T.accent}20` : `${T.purple}20`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {isVoice ? <Zap size={11} color={T.accent} /> : <Brain size={11} color={T.purple} />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
+                {/* "+ New Chat" Button */}
+                <button
+                  onClick={handleNewSession}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: `1px dashed ${T.border}`,
+                    background: 'transparent',
+                    color: T.muted,
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    marginTop: 8,
+                    marginBottom: 16,
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = T.accent;
+                    e.currentTarget.style.color = T.accent;
+                    e.currentTarget.style.background = `${T.accent}05`;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = T.border;
+                    e.currentTarget.style.color = T.muted;
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <Plus size={14} />
+                  <span>New Chat</span>
+                </button>
+
+                {/* History List */}
+                <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4, width: '100%', display: 'flex', flexDirection: 'column' }}>
+                  {orderedGroups.map((group) => {
+                    const items = groupedSessions[group];
+                    if (!items || items.length === 0) return null;
+                    return (
+                      <div key={group} style={{ marginBottom: 14 }}>
+                        <div style={{
+                          fontSize: 9.5,
+                          color: T.dim,
+                          fontWeight: 700,
+                          letterSpacing: '0.08em',
+                          textTransform: 'uppercase',
+                          padding: '0 6px',
+                          marginBottom: 6,
+                        }}>
+                          {group}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {items.map((session) => {
+                            const isActive = session.id === currentSessionId;
+                            const isVoice = session.type === 'voice';
+                            return (
+                              <button
+                                key={session.type + '-' + session.id}
+                                onClick={() => handleSelectSession(session)}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 10px',
+                                  borderRadius: 8,
+                                  border: 'none',
+                                  background: isActive ? `${T.accent}15` : 'transparent',
+                                  color: isActive ? T.text : T.muted,
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  textAlign: 'left',
+                                  fontFamily: 'inherit',
+                                  transition: 'all 0.15s',
+                                }}
+                                title={session.label || 'Untitled'}
+                                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.s2; }}
+                                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                              >
+                                <span style={{
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: 6,
+                                  background: isVoice ? `${T.accent}20` : `${T.purple}20`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}>
+                                  {isVoice ? <Zap size={11} color={T.accent} /> : <Brain size={11} color={T.purple} />}
+                                </span>
+                                <span style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  fontWeight: isActive ? 600 : 400,
+                                  flex: 1,
+                                }}>
+                                  {session.label || 'Untitled'}
+                                </span>
+                                <span style={{ fontSize: 9, color: T.dim, flexShrink: 0 }}>
+                                  {isVoice ? 'Voice' : 'Text'}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {sessions.length === 0 && (
+                    <div style={{ color: T.dim, fontSize: 11, textAlign: 'center', padding: '24px 0' }}>
+                      No sessions yet
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          NAV.map(({ id, Icon, label }) => {
+            const active = isActive(id);
+            return (
+              <button key={id} onClick={() => router.push(id)} style={{
+                width: isCollapsed ? 42 : '100%',
+                height: isCollapsed ? 42 : 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: isCollapsed ? 'center' : 'flex-start',
+                gap: isCollapsed ? 0 : 11,
+                padding: isCollapsed ? '0' : '10px 13px',
+                borderRadius: 9,
+                marginBottom: 3,
+                background: active ? `${T.accent}18` : 'transparent',
+                border: active ? `1px solid ${T.accent}30` : '1px solid transparent',
+                color: active ? T.accent : T.muted,
+                cursor: 'pointer',
+                fontSize: 13.5,
+                fontWeight: active ? 600 : 400,
+                letterSpacing: '-0.01em',
+                transition: 'all 0.15s',
+                fontFamily: 'inherit',
+              }}
+              title={isCollapsed ? label : ""}
+              >
+                <Icon size={16} />
+                {!isCollapsed && label}
+              </button>
+            );
+          })
+        )}
       </div>
 
       {/* User Profile */}

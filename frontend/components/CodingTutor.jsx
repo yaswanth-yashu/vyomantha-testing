@@ -18,7 +18,6 @@ import {
   CODING_TUTOR_SYSTEM, TUTOR_SYSTEM, QUIZ_SYSTEM, FLASHCARD_SYSTEM, INFOGRAPHIC_SYSTEM, SIMPLER_SYSTEM, EXAMPLES_SYSTEM,
   MAX_TOKENS, getTheme, setTheme
 } from '@/lib/lms-data';
-import UnifiedSidebar from '@/components/voice-tutor/UnifiedSidebar';
 import MobileNav from '@/components/MobileNav';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 import dynamic from 'next/dynamic';
@@ -236,6 +235,28 @@ export default function CodingTutor() {
     } catch {}
   }, []);
 
+  // Save currentSessionId to localStorage
+  useEffect(() => {
+    if (currentSessionId) {
+      localStorage.setItem('current-coding-tutor-session-id', currentSessionId);
+    } else {
+      localStorage.removeItem('current-coding-tutor-session-id');
+    }
+  }, [currentSessionId]);
+
+  // Synchronize state with Sidebar.jsx
+  useEffect(() => {
+    const event = new CustomEvent('tutor-state-update', {
+      detail: {
+        currentSessionId,
+        textSessions,
+        voiceSessions: [],
+        type: 'coding-tutor'
+      }
+    });
+    window.dispatchEvent(event);
+  }, [currentSessionId, textSessions]);
+
   const mergedSessions = useMemo(() => {
     const text = (textSessions || []).map(s => ({ ...s, type: 'text' }));
     text.sort((a, b) => {
@@ -261,6 +282,28 @@ export default function CodingTutor() {
     setCurrentSessionId(session.id);
     setErr(''); setTopic('');
   }, []);
+
+  // Listen to events from the sidebar
+  useEffect(() => {
+    const handleSelect = (e) => {
+      handleSelectSession(e.detail);
+    };
+
+    const handleNew = () => {
+      setMessages([]);
+      setCurrentSessionId(null);
+      setTopic('');
+      setErr('');
+    };
+
+    window.addEventListener('select-coding-tutor-session', handleSelect);
+    window.addEventListener('new-coding-tutor-session', handleNew);
+
+    return () => {
+      window.removeEventListener('select-coding-tutor-session', handleSelect);
+      window.removeEventListener('new-coding-tutor-session', handleNew);
+    };
+  }, [handleSelectSession]);
 
   const saveSession = useCallback((msgs, overrideSid) => {
     if (!msgs.some(m => m.role === 'ai')) return;
@@ -593,14 +636,6 @@ export default function CodingTutor() {
     <>
       <MobileNav title="Coding Tutor" accent={T.amber} items={tutorNavItems} extras={tutorExtras} />
       <div style={{ display: 'flex', height: '100vh', background: T.bg, overflow: 'hidden' }}>
-        {!isMobile && (
-          <UnifiedSidebar
-            sessions={mergedSessions}
-            onSelectSession={handleSelectSession}
-            currentSessionId={currentSessionId}
-            showMenuButton={false}
-          />
-        )}
         <div id="tutor-workspace-container" style={{ flex: 1, display: 'flex', flexDirection: showVerticalSplit ? 'column' : 'row', overflow: 'hidden' }}>
           
           {/* Chat Container */}
