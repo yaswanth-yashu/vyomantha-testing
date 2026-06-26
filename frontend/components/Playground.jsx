@@ -38,6 +38,41 @@ export default function Playground({
   const fitAddonRef = useRef(null);
   const playIntervalRef = useRef(null);
   const editorViewRef = useRef(null);
+  const editorPanelRef = useRef(null);
+  const [panelHeight, setPanelHeight] = useState(250);
+  const isDraggingPanelRef = useRef(false);
+
+  const handlePanelMouseDown = (e) => {
+    e.preventDefault();
+    isDraggingPanelRef.current = true;
+    document.addEventListener('mousemove', handlePanelMouseMove);
+    document.addEventListener('mouseup', handlePanelMouseUp);
+  };
+
+  const handlePanelMouseMove = (e) => {
+    if (!isDraggingPanelRef.current) return;
+    const container = editorPanelRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      let newHeight = rect.bottom - e.clientY - 36;
+      if (newHeight < 80) newHeight = 80;
+      if (newHeight > rect.height - 150) newHeight = rect.height - 150;
+      setPanelHeight(newHeight);
+    }
+  };
+
+  const handlePanelMouseUp = () => {
+    isDraggingPanelRef.current = false;
+    document.removeEventListener('mousemove', handlePanelMouseMove);
+    document.removeEventListener('mouseup', handlePanelMouseUp);
+  };
+
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handlePanelMouseMove);
+      document.removeEventListener('mouseup', handlePanelMouseUp);
+    };
+  }, []);
 
   // Hook callbacks
   const onStdout = (text) => {
@@ -150,7 +185,7 @@ export default function Playground({
     }
   }, [currentStep, traceData]);
 
-  // Initialize terminal
+  // Initialize terminal with layout safety delays
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!terminalElRef.current) return;
@@ -164,25 +199,33 @@ export default function Playground({
         cursor: '#5B8CF8',
       },
       fontSize: 13,
-      fontFamily: "var(--font-outfit), monospace",
+      fontFamily: " var(--font-outfit), monospace",
       convertEol: true
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
-    term.open(terminalElRef.current);
 
-    terminalInstanceRef.current = term;
-    fitAddonRef.current = fitAddon;
-
-    term.writeln("\x1b[33mLoading Python Environment (Pyodide WASM)...\x1b[0m");
+    // Delay opening slightly to let CSS grid/flex layouts fully settle their dimensions
+    const initTimer = setTimeout(() => {
+      if (isUnmounted.current || !terminalElRef.current) return;
+      try {
+        term.open(terminalElRef.current);
+        terminalInstanceRef.current = term;
+        fitAddonRef.current = fitAddon;
+        fitAddon.fit();
+        term.writeln("\x1b[33mLoading Python Environment (Pyodide WASM)...\x1b[0m");
+      } catch (e) {
+        console.warn("Failed to initialize xterm:", e);
+      }
+    }, 100);
 
     // Bulletproof terminal fitting using ResizeObserver
     const resizeObserver = new ResizeObserver((entries) => {
       if (isUnmounted.current) return;
       for (let entry of entries) {
         const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) {
+        if (width > 0 && height > 0 && terminalInstanceRef.current) {
           try {
             fitAddon.fit();
           } catch (e) {
@@ -198,8 +241,13 @@ export default function Playground({
 
     return () => {
       isUnmounted.current = true;
+      clearTimeout(initTimer);
       resizeObserver.disconnect();
-      term.dispose();
+      try {
+        term.dispose();
+      } catch (e) {
+        // Ignore internal disposal errors
+      }
       terminalInstanceRef.current = null;
       fitAddonRef.current = null;
     };
@@ -467,9 +515,12 @@ export default function Playground({
       </div>
 
       {/* Editor & Bottom Panels (Vertical Flex) */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: 'calc(100% - 50px)' }}>
+      <div 
+        ref={editorPanelRef}
+        style={{ display: 'flex', flexDirection: 'column', flex: 1, height: 'calc(100% - 50px)' }}
+      >
         {/* Code Editor Container */}
-        <div style={{ overflow: 'auto', background: '#0F172A' }}>
+        <div style={{ flex: 1, minHeight: 100, overflow: 'auto', background: '#0F172A' }}>
           <CodeMirror
             value={code}
             height="100%"
@@ -482,6 +533,22 @@ export default function Playground({
             style={{ fontSize: 13, fontFamily: 'monospace' }}
           />
         </div>
+
+        {/* Resize Handle */}
+        <div
+          onMouseDown={handlePanelMouseDown}
+          style={{
+            height: 5,
+            cursor: 'row-resize',
+            background: 'var(--border)',
+            transition: 'background 0.2s',
+            zIndex: 10,
+            width: '100%',
+            flexShrink: 0
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--accent)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--border)'}
+        />
 
         {/* Tab Selection Header */}
         <div style={{
@@ -565,7 +632,7 @@ export default function Playground({
         </div>
 
         {/* Tab Content Area */}
-        <div style={{ flex: 0.9, position: 'relative', overflow: 'hidden', background: 'var(--s1)' }}>
+        <div style={{ height: panelHeight, flexShrink: 0, position: 'relative', overflow: 'hidden', background: 'var(--s1)' }}>
           
           {/* Console Tab Content */}
           <div

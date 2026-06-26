@@ -245,9 +245,27 @@ export default function LessonPage({ lesson, completed = {}, onComplete }) {
         : { padding: '32px 24px', display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 28, fontFamily: 'var(--font-outfit), sans-serif', width: '100%', maxWidth: '100%' })
     : { padding: `32px ${rPad}px`, maxWidth: 900, fontFamily: 'var(--font-outfit), sans-serif', margin: '0 auto' };
 
+  const showSplitLayout = isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop;
+  const showVerticalSplit = isPlaygroundOpen && (isMobile || isTabletOrSmallDesktop);
+
   return (
-    <div style={outerStyle}>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: showVerticalSplit ? 'column' : 'row',
+      height: showSplitLayout ? '100vh' : 'auto',
+      overflow: showSplitLayout ? 'hidden' : 'visible',
+      width: '100%',
+      background: T.bg
+    }}>
+      <div style={{
+        width: showSplitLayout ? '55%' : '100%',
+        flex: showSplitLayout ? 'none' : 1,
+        height: showSplitLayout ? '100%' : 'auto',
+        overflowY: showSplitLayout ? 'auto' : 'visible',
+        padding: isMobile ? '20px 16px' : '32px 36px',
+        display: 'flex',
+        flexDirection: 'column'
+      }} className="no-scrollbar">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMobile ? 14 : 22, flexWrap: 'wrap', gap: 10 }}>
           <button onClick={() => router.push('/courses')}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 13, padding: 0 }}>
@@ -771,19 +789,25 @@ export default function LessonPage({ lesson, completed = {}, onComplete }) {
       </div>
 
       {isPlaygroundOpen && isMobile && (
-        <div style={{ marginTop: 24, height: 400 }}>
+        <div style={{ marginTop: 24, height: 400, flexShrink: 0 }}>
           <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
         </div>
       )}
       {isPlaygroundOpen && !isMobile && isTabletOrSmallDesktop && (
-        <div style={{ marginTop: 32, height: 500 }}>
+        <div style={{ marginTop: 32, height: 500, flexShrink: 0 }}>
           <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
         </div>
       )}
     </div>
 
-    {isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop && (
-      <div style={{ position: 'sticky', top: 32, height: 'calc(100vh - 64px)', minHeight: 500 }}>
+    {showSplitLayout && (
+      <div style={{
+        flex: 1,
+        height: '100%',
+        padding: '32px 24px 32px 0',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
         <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
       </div>
     )}

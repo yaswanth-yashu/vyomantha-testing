@@ -205,9 +205,27 @@ export default function CoursePage() {
     const done = courseLessons.filter(l => completed[l.id]).length;
     const progressPercent = total > 0 ? Math.round((done / total) * 100) : 0;
 
+    const showSplitLayout = isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop;
+    const showVerticalSplit = isPlaygroundOpen && (isMobile || isTabletOrSmallDesktop);
+
     return (
-      <div style={outerStyle}>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: showVerticalSplit ? 'column' : 'row',
+        height: showSplitLayout ? '100vh' : 'auto',
+        overflow: showSplitLayout ? 'hidden' : 'visible',
+        width: '100%',
+        background: T.bg
+      }}>
+        <div style={{
+          width: showSplitLayout ? '55%' : '100%',
+          flex: showSplitLayout ? 'none' : 1,
+          height: showSplitLayout ? '100%' : 'auto',
+          overflowY: showSplitLayout ? 'auto' : 'visible',
+          padding: isMobile ? '20px 16px' : '32px 36px',
+          display: 'flex',
+          flexDirection: 'column'
+        }} className="no-scrollbar">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
             {/* Back button */}
             <button
@@ -426,19 +444,25 @@ export default function CoursePage() {
           </>
         )}
           {isPlaygroundOpen && isMobile && (
-            <div style={{ marginTop: 24, height: 400 }}>
+            <div style={{ marginTop: 24, height: 400, flexShrink: 0 }}>
               <Playground initialCode={`# Practice for: ${selectedCourse.title}\n# Write your code here\n\n`} />
             </div>
           )}
           {isPlaygroundOpen && !isMobile && isTabletOrSmallDesktop && (
-            <div style={{ marginTop: 32, height: 500 }}>
+            <div style={{ marginTop: 32, height: 500, flexShrink: 0 }}>
               <Playground initialCode={`# Practice for: ${selectedCourse.title}\n# Write your code here\n\n`} />
             </div>
           )}
         </div>
 
-        {isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop && (
-          <div style={{ position: 'sticky', top: 32, height: 'calc(100vh - 64px)', minHeight: 500 }}>
+        {showSplitLayout && (
+          <div style={{
+            flex: 1,
+            height: '100%',
+            padding: '32px 24px 32px 0',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
             <Playground initialCode={`# Practice for: ${selectedCourse.title}\n# Write your code here\n\n`} />
           </div>
         )}
@@ -446,10 +470,27 @@ export default function CoursePage() {
     );
   }
 
-  // Render Courses Directory
+  const showSplitLayout = isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop;
+  const showVerticalSplit = isPlaygroundOpen && (isMobile || isTabletOrSmallDesktop);
+
   return (
-    <div style={outerStyle}>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: showVerticalSplit ? 'column' : 'row',
+      height: showSplitLayout ? '100vh' : 'auto',
+      overflow: showSplitLayout ? 'hidden' : 'visible',
+      width: '100%',
+      background: T.bg
+    }}>
+      <div style={{
+        width: showSplitLayout ? '55%' : '100%',
+        flex: showSplitLayout ? 'none' : 1,
+        height: showSplitLayout ? '100%' : 'auto',
+        overflowY: showSplitLayout ? 'auto' : 'visible',
+        padding: isMobile ? '20px 16px' : '32px 36px',
+        display: 'flex',
+        flexDirection: 'column'
+      }} className="no-scrollbar">
         {/* Directory Title */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
           <div>
@@ -598,19 +639,25 @@ export default function CoursePage() {
         </div>
       )}
         {isPlaygroundOpen && isMobile && (
-          <div style={{ marginTop: 24, height: 400 }}>
+          <div style={{ marginTop: 24, height: 400, flexShrink: 0 }}>
             <Playground initialCode={`# General Coding Playground\n# Write your code here\n\n`} />
           </div>
         )}
         {isPlaygroundOpen && !isMobile && isTabletOrSmallDesktop && (
-          <div style={{ marginTop: 32, height: 500 }}>
+          <div style={{ marginTop: 32, height: 500, flexShrink: 0 }}>
             <Playground initialCode={`# General Coding Playground\n# Write your code here\n\n`} />
           </div>
         )}
       </div>
 
-      {isPlaygroundOpen && !isMobile && !isTabletOrSmallDesktop && (
-        <div style={{ position: 'sticky', top: 32, height: 'calc(100vh - 64px)', minHeight: 500 }}>
+      {showSplitLayout && (
+        <div style={{
+          flex: 1,
+          height: '100%',
+          padding: '32px 24px 32px 0',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
           <Playground initialCode={`# General Coding Playground\n# Write your code here\n\n`} />
         </div>
       )}
