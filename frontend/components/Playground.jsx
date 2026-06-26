@@ -65,9 +65,11 @@ export default function Playground({
   };
 
   const onError = (msg) => {
+    setIsTracing(false);
     if (terminalInstanceRef.current) {
       terminalInstanceRef.current.write(`\x1b[31mError: ${msg}\x1b[0m\n`);
     }
+    if (onTraceComplete) onTraceComplete(null);
   };
 
   const onTraceResult = (trace) => {
