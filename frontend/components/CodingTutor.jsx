@@ -17,7 +17,7 @@ import {
   parseQuizOutput, parseFlashcardsOutput, parseInfographicOutput,
   CODING_TUTOR_SYSTEM, TUTOR_SYSTEM, QUIZ_SYSTEM, FLASHCARD_SYSTEM, INFOGRAPHIC_SYSTEM, SIMPLER_SYSTEM, EXAMPLES_SYSTEM,
   BUG_ANALYSIS_SYSTEM, BUG_TIPS_SYSTEM, BUG_FIX_METHODS_SYSTEM, FIX_EXPLANATION_SYSTEM, SOCRATIC_HELP_SYSTEM,
-  MODE_INSTRUCTIONS, detectPromptInjection,
+  MODE_INSTRUCTIONS, LENGTH_INSTRUCTIONS, detectPromptInjection,
   MAX_TOKENS, getTheme, setTheme
 } from '@/lib/lms-data';
 import MobileNav from '@/components/MobileNav';
@@ -1011,7 +1011,7 @@ export default function CodingTutor() {
                       <div style={{ display: 'flex', gap: rGap, justifyContent: 'flex-end', maxWidth: msgMaxW, marginLeft: 'auto' }}>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.04em', marginBottom: 4 }}>YOU</div>
-                          <div style={{ background: T.s3, border: `1px solid ${T.border}`, borderRadius: '14px 14px 4px 14px', padding: '10px 14px', color: T.text, fontSize: 14, lineHeight: 1.65, maxWidth: bubbleMaxW }}>
+                          <div style={{ background: T.s3, border: `1px solid ${T.border}`, borderRadius: '14px 14px 4px 14px', padding: '10px 14px', color: T.text, fontSize: 14, lineHeight: 1.65, maxWidth: bubbleMaxW, whiteSpace: 'pre-wrap', wordBreak: 'break-word', textAlign: 'left' }}>
                             {msg.content}
                           </div>
                           <div style={{ fontSize: 10, color: T.dim, marginTop: 4 }}>{msg.mode} &middot; {msg.length}</div>
