@@ -362,7 +362,7 @@ export default function Playground({
     
     if (error) {
       return (
-        <div style={{ color: 'var(--red)', background: 'rgba(245,91,107,0.08)', border: '1px solid rgba(245,91,107,0.3)', padding: 12, borderRadius: 8, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ color: '#F55B6B', background: 'rgba(245,91,107,0.08)', border: '1px solid rgba(245,91,107,0.3)', padding: 12, borderRadius: 8, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <strong style={{ display: 'block' }}>⚠️ Python Runtime Error</strong>
           <span style={{ fontFamily: 'monospace' }}>{error}</span>
         </div>
@@ -372,7 +372,7 @@ export default function Playground({
     const keys = Object.keys(variables);
     if (keys.length === 0) {
       return (
-        <div style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
+        <div style={{ color: '#647298', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
           No local variables defined in this step.
         </div>
       );
@@ -388,7 +388,7 @@ export default function Playground({
           if (isArray) {
             return (
               <div key={key} className="variable-card" style={{ background: '#0D111A', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{key} (List)</div>
+                <div style={{ fontSize: 11, color: '#8892B0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{key} (List)</div>
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                   {val.map((item, idx) => (
                     <div
@@ -405,7 +405,7 @@ export default function Playground({
                         justifyContent: 'center',
                         fontSize: 12.5,
                         fontWeight: 700,
-                        color: 'var(--accent)'
+                        color: '#5B8CF8'
                       }}
                     >
                       {String(item)}
@@ -419,12 +419,12 @@ export default function Playground({
           if (isDict) {
             return (
               <div key={key} className="variable-card" style={{ background: '#0D111A', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{key} (Dict)</div>
+                <div style={{ fontSize: 11, color: '#8892B0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{key} (Dict)</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {Object.entries(val).map(([k, v]) => (
                     <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, borderBottom: `1px solid rgba(255, 255, 255, 0.05)`, padding: '3px 0' }}>
-                      <span style={{ color: 'var(--muted)', fontFamily: 'monospace' }}>{k}</span>
-                      <span style={{ fontWeight: 600, color: 'var(--text)', fontFamily: 'monospace' }}>{String(v)}</span>
+                      <span style={{ color: '#8892B0', fontFamily: 'monospace' }}>{k}</span>
+                      <span style={{ fontWeight: 600, color: '#DDE3F2', fontFamily: 'monospace' }}>{String(v)}</span>
                     </div>
                   ))}
                 </div>
@@ -433,7 +433,7 @@ export default function Playground({
           }
 
           const valType = typeof val;
-          const valColor = valType === 'boolean' ? 'var(--green)' : (valType === 'number' ? 'var(--accent)' : 'var(--amber)');
+          const valColor = valType === 'boolean' ? '#22C5A0' : (valType === 'number' ? '#5B8CF8' : '#F5A95B');
 
           return (
             <div
@@ -449,7 +449,7 @@ export default function Playground({
                 borderRadius: 8
               }}
             >
-              <span style={{ fontWeight: 600, color: 'var(--muted)', fontSize: 12.5, fontFamily: 'monospace' }}>{key}</span>
+              <span style={{ fontWeight: 600, color: '#8892B0', fontSize: 12.5, fontFamily: 'monospace' }}>{key}</span>
               <span style={{ fontSize: 12.5, color: valColor, fontWeight: 700, fontFamily: 'monospace' }}>{String(val)}</span>
             </div>
           );
@@ -486,7 +486,7 @@ export default function Playground({
             onClick={handleRun}
             disabled={!isReady || isRunning || isTracing}
             style={{
-              background: (!isReady || isRunning || isTracing) ? 'var(--s3)' : 'var(--green)',
+              background: (!isReady || isRunning || isTracing) ? 'rgba(255, 255, 255, 0.08)' : '#22C5A0',
               color: '#000',
               border: 'none',
               padding: '6px 14px',
@@ -509,7 +509,7 @@ export default function Playground({
 
         {/* Status Indicator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--muted)', fontWeight: 500 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#8892B0', fontWeight: 500 }}>
             {!isReady ? (
               <>
                 <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
@@ -518,22 +518,22 @@ export default function Playground({
             ) : isRunning ? (
               <>
                 <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ color: 'var(--accent)' }}>Running Code...</span>
+                <span style={{ color: '#5B8CF8' }}>Running Code...</span>
               </>
             ) : isTracing ? (
               <>
                 <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ color: 'var(--amber)' }}>Generating Trace...</span>
+                <span style={{ color: '#F5A95B' }}>Generating Trace...</span>
               </>
             ) : isGeneratingExplanation ? (
               <>
                 <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ color: 'var(--green)' }}>Explaining Code...</span>
+                <span style={{ color: '#22C5A0' }}>Explaining Code...</span>
               </>
             ) : (
               <>
-                <CheckCircle size={13} style={{ color: 'var(--green)' }} />
-                <span style={{ color: 'var(--green)' }}>Environment Ready</span>
+                <CheckCircle size={13} style={{ color: '#22C5A0' }} />
+                <span style={{ color: '#22C5A0' }}>Environment Ready</span>
               </>
             )}
           </div>
@@ -571,7 +571,7 @@ export default function Playground({
             width: '100%',
             flexShrink: 0
           }}
-          onMouseEnter={e => e.currentTarget.style.background = 'var(--accent)'}
+          onMouseEnter={e => e.currentTarget.style.background = '#5B8CF8'}
           onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
         />
 
@@ -591,8 +591,8 @@ export default function Playground({
             style={{
               background: activeTab === 'console' ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
               border: 'none',
-              borderBottom: activeTab === 'console' ? `2px solid var(--accent)` : 'none',
-              color: activeTab === 'console' ? 'var(--text)' : 'var(--muted)',
+              borderBottom: activeTab === 'console' ? `2px solid #5B8CF8` : 'none',
+              color: activeTab === 'console' ? '#F8FAFC' : '#8892B0',
               padding: '6px 16px',
               fontSize: 11,
               fontWeight: 700,
@@ -611,8 +611,8 @@ export default function Playground({
             style={{
               background: activeTab === 'visualizer' ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
               border: 'none',
-              borderBottom: activeTab === 'visualizer' ? `2px solid var(--amber)` : 'none',
-              color: activeTab === 'visualizer' ? 'var(--text)' : 'var(--muted)',
+              borderBottom: activeTab === 'visualizer' ? `2px solid #F5A95B` : 'none',
+              color: activeTab === 'visualizer' ? '#F8FAFC' : '#8892B0',
               padding: '6px 16px',
               fontSize: 11,
               fontWeight: 700,
@@ -628,9 +628,9 @@ export default function Playground({
             }}
           >
             {isTracing ? (
-              <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} color="var(--amber)" />
+              <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} color="#F5A95B" />
             ) : (
-              <Sparkles size={11} color={traceData ? 'var(--amber)' : 'currentColor'} />
+              <Sparkles size={11} color={traceData ? '#F5A95B' : 'currentColor'} />
             )}
             Visualizer {traceData ? `(${traceData.length} Steps)` : ''}
           </button>
@@ -639,8 +639,8 @@ export default function Playground({
             style={{
               background: activeTab === 'explanation' ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
               border: 'none',
-              borderBottom: activeTab === 'explanation' ? `2px solid var(--green)` : 'none',
-              color: activeTab === 'explanation' ? 'var(--text)' : 'var(--muted)',
+              borderBottom: activeTab === 'explanation' ? `2px solid #22C5A0` : 'none',
+              color: activeTab === 'explanation' ? '#F8FAFC' : '#8892B0',
               padding: '6px 16px',
               fontSize: 11,
               fontWeight: 700,
@@ -656,9 +656,9 @@ export default function Playground({
             }}
           >
             {isGeneratingExplanation ? (
-              <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} color="var(--green)" />
+              <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} color="#22C5A0" />
             ) : (
-              <BookOpen size={11} color={explanation ? 'var(--green)' : 'currentColor'} />
+              <BookOpen size={11} color={explanation ? '#22C5A0' : 'currentColor'} />
             )}
             Explanation
           </button>
@@ -691,15 +691,15 @@ export default function Playground({
           }}>
             {/* 1. If Loading or empty trace */}
             {isTracing && (
-              <div style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted)' }}>
+              <div style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#8892B0' }}>
                 <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
                 <span style={{ fontSize: 13 }}>Generating step-by-step trace timeline...</span>
               </div>
             )}
 
             {!isTracing && !traceData && (
-              <div style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px', textAlign: 'center', color: 'var(--muted)', gap: 8 }}>
-                <Sparkles size={24} color="var(--amber)" />
+              <div style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px', textAlign: 'center', color: '#8892B0', gap: 8 }}>
+                <Sparkles size={24} color="#F5A95B" />
                 <span style={{ fontSize: 13, maxWidth: 360 }}>
                   No active trace loaded. Write Python code and click <strong>Run Trace</strong> or click <strong>Visualize Code</strong> in the chatbot below!
                 </span>
@@ -724,7 +724,7 @@ export default function Playground({
                   <button
                     onClick={() => setIsPlaying(!isPlaying)}
                     style={{
-                      background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4
+                      background: 'none', border: 'none', color: '#F8FAFC', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4
                     }}
                     title={isPlaying ? "Pause execution" : "Auto play timeline"}
                   >
@@ -736,7 +736,7 @@ export default function Playground({
                     onClick={() => { setIsPlaying(false); setCurrentStep(prev => Math.max(prev - 1, 0)); }}
                     disabled={currentStep === 0}
                     style={{
-                      background: 'none', border: 'none', color: currentStep === 0 ? 'var(--dim)' : 'var(--text)', cursor: currentStep === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', padding: 4
+                      background: 'none', border: 'none', color: currentStep === 0 ? '#3A4560' : '#F8FAFC', cursor: currentStep === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', padding: 4
                     }}
                     title="Previous step"
                   >
@@ -747,7 +747,7 @@ export default function Playground({
                     onClick={() => { setIsPlaying(false); setCurrentStep(prev => Math.min(prev + 1, traceData.length - 1)); }}
                     disabled={currentStep === traceData.length - 1}
                     style={{
-                      background: 'none', border: 'none', color: currentStep === traceData.length - 1 ? 'var(--dim)' : 'var(--text)', cursor: currentStep === traceData.length - 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', padding: 4
+                      background: 'none', border: 'none', color: currentStep === traceData.length - 1 ? '#3A4560' : '#F8FAFC', cursor: currentStep === traceData.length - 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', padding: 4
                     }}
                     title="Next step"
                   >
@@ -763,14 +763,14 @@ export default function Playground({
                     onChange={(e) => { setIsPlaying(false); setCurrentStep(Number(e.target.value)); }}
                     style={{
                       flex: 1,
-                      accentColor: 'var(--amber)',
+                      accentColor: '#F5A95B',
                       cursor: 'pointer',
                       height: 4
                     }}
                   />
 
                   {/* Step Counts */}
-                  <span style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 600, fontFamily: 'monospace' }}>
+                  <span style={{ fontSize: 11.5, color: '#8892B0', fontWeight: 600, fontFamily: 'monospace' }}>
                     Step {currentStep + 1} of {traceData.length}
                   </span>
                 </div>
@@ -785,7 +785,7 @@ export default function Playground({
                     padding: 14,
                     background: '#040508'
                   }}>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 10 }}>Local Variables Scope</div>
+                    <div style={{ fontSize: 11, color: '#8892B0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 10 }}>Local Variables Scope</div>
                     {renderVariables()}
                   </div>
 
@@ -804,18 +804,18 @@ export default function Playground({
             padding: 16,
             overflowY: 'auto',
             background: '#040508',
-            color: 'var(--text)'
+            color: '#F8FAFC'
           }}>
             {!explanation && !isGeneratingExplanation ? (
-              <div style={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px', textAlign: 'center', color: 'var(--muted)', gap: 8 }}>
-                <BookOpen size={24} color="var(--green)" />
+              <div style={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px', textAlign: 'center', color: '#8892B0', gap: 8 }}>
+                <BookOpen size={24} color="#22C5A0" />
                 <span style={{ fontSize: 13, maxWidth: 360 }}>
                   No active explanation loaded. Click <strong>Visualize Code</strong> in the chatbot below to view the explanation here!
                 </span>
               </div>
             ) : isGeneratingExplanation && !explanation ? (
-              <div style={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted)' }}>
-                <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} color="var(--green)" />
+              <div style={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#8892B0' }}>
+                <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} color="#22C5A0" />
                 <span style={{ fontSize: 13 }}>Generating step-by-step code explanation...</span>
               </div>
             ) : (
@@ -837,9 +837,9 @@ export default function Playground({
                 top: 8,
                 right: 8,
                 background: 'rgba(0,0,0,0.4)',
-                border: '1px solid var(--border)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
                 borderRadius: 6,
-                color: 'var(--dim)',
+                color: '#647298',
                 cursor: 'pointer',
                 padding: 6,
                 display: 'flex',
@@ -847,8 +847,8 @@ export default function Playground({
                 transition: 'color 0.15s, background 0.15s',
                 zIndex: 10
               }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--dim)'; e.currentTarget.style.background = 'rgba(0,0,0,0.4)'; }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#F8FAFC'; e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#647298'; e.currentTarget.style.background = 'rgba(0,0,0,0.4)'; }}
             >
               <Trash2 size={13} />
             </button>
@@ -870,21 +870,23 @@ export default function Playground({
           color: rgba(255, 255, 255, 0.3) !important;
         }
         .cm-activeLine {
-          background-color: rgba(91, 140, 248, 0.06) !important;
+          background-color: rgba(91, 140, 248, 0.05) !important;
+          border-left: 3px solid #5B8CF8 !important;
+          box-shadow: inset 5px 0 10px -5px rgba(91, 140, 248, 0.25);
+          animation: line-pulse 2s infinite ease-in-out;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
         .cm-activeLineGutter {
           background-color: rgba(91, 140, 248, 0.12) !important;
-          color: var(--accent) !important;
+          color: #5B8CF8 !important;
         }
         .cm-selectionBackground {
-          background: rgba(91, 140, 248, 0.22) !important;
-          border-radius: 2px;
-          animation: line-glow 1.5s infinite alternate;
+          background: rgba(91, 140, 248, 0.08) !important;
         }
         
-        @keyframes line-glow {
-          0% { background: rgba(91, 140, 248, 0.16); box-shadow: inset 0 0 4px rgba(91, 140, 248, 0.15); }
-          100% { background: rgba(91, 140, 248, 0.28); box-shadow: inset 0 0 10px rgba(91, 140, 248, 0.3); }
+        @keyframes line-pulse {
+          0%, 100% { background-color: rgba(91, 140, 248, 0.04); }
+          50% { background-color: rgba(91, 140, 248, 0.12); }
         }
 
         /* Tab content transition */
@@ -915,7 +917,41 @@ export default function Playground({
           border-radius: 4px;
         }
         .sandbox-scroll::-webkit-scrollbar-thumb:hover {
-          background: var(--accent) !important;
+          background: #5B8CF8 !important;
+        }
+
+        /* Markdown rendering overrides for Sandbox Explanation Tab */
+        .tab-pane .md-content {
+          color: #E2E8F0 !important;
+        }
+        .tab-pane .md-content p {
+          color: #DDE3F2 !important;
+          line-height: 1.7 !important;
+          margin-bottom: 12px !important;
+        }
+        .tab-pane .md-content strong {
+          color: #FFFFFF !important;
+          font-weight: 700 !important;
+        }
+        .tab-pane .md-content em {
+          color: #F5A95B !important;
+        }
+        .tab-pane .md-content code {
+          background-color: #161B26 !important;
+          color: #F5A95B !important;
+          border: 1px solid rgba(255, 255, 255, 0.06) !important;
+          padding: 2px 6px !important;
+          border-radius: 4px !important;
+          font-family: monospace !important;
+          font-size: 12.5px !important;
+        }
+        .tab-pane .md-content ul, .tab-pane .md-content ol {
+          padding-left: 20px !important;
+          margin-bottom: 12px !important;
+          color: #DDE3F2 !important;
+        }
+        .tab-pane .md-content li {
+          margin-bottom: 6px !important;
         }
       `}</style>
     </div>
