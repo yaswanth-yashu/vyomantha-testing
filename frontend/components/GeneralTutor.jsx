@@ -172,6 +172,19 @@ export default function GeneralTutor() {
     setErr(''); setTopic('');
   }, []);
 
+  // Handle click outside to close open feature cards
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (e.target.closest('[data-feature-container="true"]') || e.target.closest('[data-feature-button="true"]')) {
+        return;
+      }
+      setMessages(prev => prev.map(m => m.activeFeature ? { ...m, activeFeature: null } : m));
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
   // Listen to events from the sidebar
   useEffect(() => {
     const handleSelect = (e) => {
@@ -348,12 +361,25 @@ export default function GeneralTutor() {
         else if (type === 'infographic') f.infographic = { points: parseInfographicOutput(text) };
         else if (type === 'simpler') f.simpler = { text };
         else if (type === 'examples') f.examples = { text };
-        return { ...m, features: f };
+        return { ...m, features: f, activeFeature: type };
       }));
     } catch (e) {
       setErr(`Failed to generate ${type}: ${e.message}`);
     } finally {
       setGenerating({ msgIdx: null, type: null });
+    }
+  };
+
+  const handleFeatureClick = (msgIdx, type) => {
+    const msg = messages[msgIdx];
+    if (!msg) return;
+    if (featureExists(msg, type)) {
+      setMessages(prev => prev.map((m, i) => {
+        if (i !== msgIdx) return m;
+        return { ...m, activeFeature: m.activeFeature === type ? null : type };
+      }));
+    } else {
+      handleGenerateFeature(msgIdx, type);
     }
   };
 
@@ -589,8 +615,8 @@ export default function GeneralTutor() {
                     </div>
 
                     {/* ── Rendered features ── */}
-                    {msg.features?.quiz?.questions?.length > 0 && (
-                      <div style={{ marginTop: 16, background: T.s1, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
+                    {msg.activeFeature === 'quiz' && msg.features?.quiz?.questions?.length > 0 && (
+                      <div data-feature-container="true" style={{ marginTop: 16, background: T.s1, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
                         {(() => {
                           const q = msg.features.quiz;
                           const question = q.questions[q.currentIdx];
@@ -652,8 +678,8 @@ export default function GeneralTutor() {
                       </div>
                     )}
 
-                    {msg.features?.flashcards?.cards?.length > 0 && (
-                      <div style={{ marginTop: 16, background: T.s1, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
+                    {msg.activeFeature === 'flashcards' && msg.features?.flashcards?.cards?.length > 0 && (
+                      <div data-feature-container="true" style={{ marginTop: 16, background: T.s1, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
                         {(() => {
                           const fc = msg.features.flashcards;
                           const card = fc.cards[fc.currentIdx];
@@ -699,8 +725,8 @@ export default function GeneralTutor() {
                       </div>
                     )}
 
-                    {msg.features?.infographic?.points?.length > 0 && (
-                      <div style={{ marginTop: 16, background: T.s1, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
+                    {msg.activeFeature === 'infographic' && msg.features?.infographic?.points?.length > 0 && (
+                      <div data-feature-container="true" style={{ marginTop: 16, background: T.s1, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                           <span style={{ fontSize: 12, color: T.muted }}>Key concepts at a glance</span>
                           <button onClick={() => handleGenerateFeature(mi, 'infographic')}
@@ -726,8 +752,8 @@ export default function GeneralTutor() {
                       </div>
                     )}
 
-                    {msg.features?.simpler?.text && (
-                      <div style={{ marginTop: 12, background: `${T.green}10`, border: `1px solid ${T.green}30`, borderRadius: 10, padding: '14px 18px' }}>
+                    {msg.activeFeature === 'simpler' && msg.features?.simpler?.text && (
+                      <div data-feature-container="true" style={{ marginTop: 12, background: `${T.green}10`, border: `1px solid ${T.green}30`, borderRadius: 10, padding: '14px 18px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                           <span style={{ fontSize: 11, color: T.green, fontWeight: 700, letterSpacing: '0.05em' }}>SIMPLIFIED</span>
                           <button onClick={() => handleGenerateFeature(mi, 'simpler')}
@@ -743,8 +769,8 @@ export default function GeneralTutor() {
                       </div>
                     )}
 
-                    {msg.features?.examples?.text && (
-                      <div style={{ marginTop: 12, background: `${T.accent}10`, border: `1px solid ${T.accent}30`, borderRadius: 10, padding: '14px 18px' }}>
+                    {msg.activeFeature === 'examples' && msg.features?.examples?.text && (
+                      <div data-feature-container="true" style={{ marginTop: 12, background: `${T.accent}10`, border: `1px solid ${T.accent}30`, borderRadius: 10, padding: '14px 18px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                           <span style={{ fontSize: 11, color: T.accent, fontWeight: 700, letterSpacing: '0.05em' }}>EXAMPLES</span>
                           <button onClick={() => handleGenerateFeature(mi, 'examples')}
@@ -763,11 +789,31 @@ export default function GeneralTutor() {
                     {/* ── Suggestion chips ── */}
                     {!msg.local && (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                        {SUGGESTIONS.filter(s => !featureExists(msg, s.id)).map(s => {
+                        {SUGGESTIONS.map(s => {
                           const loading = isGeneratingFeature(mi, s.id);
+                          const isActive = msg.activeFeature === s.id;
                           return (
-                            <button key={s.id} onClick={() => handleGenerateFeature(mi, s.id)} disabled={loading}
-                              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 16, background: `${s.color}12`, border: `1px solid ${s.color}40`, color: s.color, fontSize: 11, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.15s' }}>
+                            <button
+                              key={s.id}
+                              data-feature-button="true"
+                              onClick={() => handleFeatureClick(mi, s.id)}
+                              disabled={loading}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                padding: '6px 12px',
+                                borderRadius: 16,
+                                background: isActive ? s.color : (loading ? 'rgba(255,255,255,0.05)' : `${s.color}12`),
+                                border: isActive ? `1px solid ${s.color}` : `1px solid ${s.color}40`,
+                                color: isActive ? '#fff' : s.color,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: loading ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.15s',
+                                boxShadow: isActive ? `0 2px 8px ${s.color}40` : 'none'
+                              }}
+                            >
                               {loading ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <s.Icon size={12} />}
                               {loading ? 'Generating...' : s.label}
                             </button>
