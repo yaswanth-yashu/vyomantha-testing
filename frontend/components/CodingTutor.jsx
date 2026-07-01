@@ -185,6 +185,14 @@ function renderAnalyticsCard(analytics) {
   );
 }
 
+const cleanMarkdown = (text) => {
+  if (!text) return '';
+  return text
+    .replace(/\*\*\s+([^*]+?)\s+\*\*/g, '**$1**')
+    .replace(/\*\*\s+([^*]+?)\*\*/g, '**$1**')
+    .replace(/\*\*([^*]+?)\s+\*\*/g, '**$1**');
+};
+
 export default function CodingTutor() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -193,7 +201,7 @@ export default function CodingTutor() {
 
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState('Beginner');
-  const [length, setLength] = useState('Medium');
+  const [length, setLength] = useState('Short');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -239,6 +247,7 @@ export default function CodingTutor() {
   };
 
   const renderMarkdown = (content, explanation = '') => {
+    const cleaned = cleanMarkdown(content);
     return (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
@@ -309,7 +318,7 @@ export default function CodingTutor() {
           }
         }}
       >
-        {content}
+        {cleaned}
       </ReactMarkdown>
     );
   };
@@ -446,7 +455,7 @@ export default function CodingTutor() {
     }));
     setMessages(msgs);
     setMode(session.mode || 'Beginner');
-    setLength(session.length || 'Medium');
+    setLength(session.length || 'Short');
     setCurrentSessionId(session.id);
     setErr(''); setTopic('');
   }, []);
@@ -1479,20 +1488,20 @@ export default function CodingTutor() {
       </div>
 
       <style>{`
-        .md-content p { margin: 0 0 0.6em 0; }
+        .md-content p { margin: 0 0 0.6em 0; text-align: justify; line-height: 1.65; }
         .md-content p:last-child { margin: 0; }
-        .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
+        .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; text-align: justify; line-height: 1.65; }
         .md-content li { margin: 0.2em 0; }
         .md-content strong { color: var(--text); font-weight: 700; }
-        .md-content em { color: #F5A95B; font-style: italic; }
-        .md-content code { background: var(--s3); padding: 1px 5px; border-radius: 4px; font-size: 13px; color: #F5A95B; }
-        .md-content pre { background: #0C0F1C; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 0.6em 0; border: 1px solid rgba(255,255,255,0.07); }
-        .md-content pre code { background: none; padding: 0; color: #DDE3F2; }
+        .md-content em { color: var(--amber); font-style: italic; }
+        .md-content code { background: var(--s3); padding: 1px 5px; border-radius: 4px; font-size: 13px; color: var(--amber); }
+        .md-content pre { background: var(--s1); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 0.6em 0; border: 1px solid var(--border); }
+        .md-content pre code { background: none; padding: 0; color: var(--text); }
         .md-content table { border-collapse: collapse; margin: 0.6em 0; }
-        .md-content th, .md-content td { border: 1px solid rgba(255,255,255,0.12); padding: 6px 10px; text-align: left; font-size: 13px; }
-        .md-content th { background: #111827; color: #F5A95B; font-weight: 600; }
-        .md-content a { color: #5B8CF8; text-decoration: underline; }
-        .md-content blockquote { border-left: 3px solid #5B8CF8; margin: 0.6em 0; padding: 4px 12px; color: #647298; background: rgba(91,140,248,0.06); border-radius: 0 8px 8px 0; }
+        .md-content th, .md-content td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 13px; }
+        .md-content th { background: var(--s2); color: var(--amber); font-weight: 600; }
+        .md-content a { color: var(--accent); text-decoration: underline; }
+        .md-content blockquote { border-left: 3px solid var(--accent); margin: 0.6em 0; padding: 4px 12px; color: var(--muted); background: var(--accent-tint); border-radius: 0 8px 8px 0; }
       `}</style>
     </>
   );

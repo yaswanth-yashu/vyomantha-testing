@@ -44,10 +44,18 @@ const SUGGESTIONS = [
   { id: 'examples', label: 'Examples', Icon: Sparkles, color: T.accent },
 ];
 
+const cleanMarkdown = (text) => {
+  if (!text) return '';
+  return text
+    .replace(/\*\*\s+([^*]+?)\s+\*\*/g, '**$1**')
+    .replace(/\*\*\s+([^*]+?)\*\*/g, '**$1**')
+    .replace(/\*\*([^*]+?)\s+\*\*/g, '**$1**');
+};
+
 export default function GeneralTutor() {
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState('Beginner');
-  const [length, setLength] = useState('Medium');
+  const [length, setLength] = useState('Short');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -167,7 +175,7 @@ export default function GeneralTutor() {
     }));
     setMessages(msgs);
     setMode(session.mode || 'Beginner');
-    setLength(session.length || 'Medium');
+    setLength(session.length || 'Short');
     setCurrentSessionId(session.id);
     setErr(''); setTopic('');
   }, []);
@@ -610,7 +618,7 @@ export default function GeneralTutor() {
                     <div style={{ fontSize: 11, color: T.purple, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 4 }}>LMS AI TUTOR</div>
                     <div style={{ color: T.text, fontSize: 14, lineHeight: 1.7 }}>
                       <div className="md-content">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMarkdown(msg.content)}</ReactMarkdown>
                       </div>
                     </div>
 
@@ -763,7 +771,7 @@ export default function GeneralTutor() {
                         </div>
                         <div style={{ color: T.text, fontSize: 14, lineHeight: 1.7 }}>
                           <div className="md-content">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.features.simpler.text}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMarkdown(msg.features.simpler.text)}</ReactMarkdown>
                           </div>
                         </div>
                       </div>
@@ -780,7 +788,7 @@ export default function GeneralTutor() {
                         </div>
                         <div style={{ color: T.text, fontSize: 14, lineHeight: 1.7 }}>
                           <div className="md-content">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.features.examples.text}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMarkdown(msg.features.examples.text)}</ReactMarkdown>
                           </div>
                         </div>
                       </div>
@@ -921,20 +929,20 @@ export default function GeneralTutor() {
       )}
 
       <style>{`
-        .md-content p { margin: 0 0 0.6em 0; }
+        .md-content p { margin: 0 0 0.6em 0; text-align: justify; line-height: 1.65; }
         .md-content p:last-child { margin: 0; }
-        .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
+        .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; text-align: justify; line-height: 1.65; }
         .md-content li { margin: 0.2em 0; }
-        .md-content strong { color: #DDE3F2; font-weight: 700; }
-        .md-content em { color: #9B6EF8; font-style: italic; }
-        .md-content code { background: #182033; padding: 1px 5px; border-radius: 4px; font-size: 13px; color: #F5A95B; }
-        .md-content pre { background: #0C0F1C; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 0.6em 0; border: 1px solid rgba(255,255,255,0.07); }
-        .md-content pre code { background: none; padding: 0; color: #DDE3F2; }
+        .md-content strong { color: var(--text); font-weight: 700; }
+        .md-content em { color: var(--purple); font-style: italic; }
+        .md-content code { background: var(--s3); padding: 1px 5px; border-radius: 4px; font-size: 13px; color: var(--amber); }
+        .md-content pre { background: var(--s1); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 0.6em 0; border: 1px solid var(--border); }
+        .md-content pre code { background: none; padding: 0; color: var(--text); }
         .md-content table { border-collapse: collapse; margin: 0.6em 0; }
-        .md-content th, .md-content td { border: 1px solid rgba(255,255,255,0.12); padding: 6px 10px; text-align: left; font-size: 13px; }
-        .md-content th { background: #111827; color: #9B6EF8; font-weight: 600; }
-        .md-content a { color: #5B8CF8; text-decoration: underline; }
-        .md-content blockquote { border-left: 3px solid #5B8CF8; margin: 0.6em 0; padding: 4px 12px; color: #647298; background: rgba(91,140,248,0.06); border-radius: 0 8px 8px 0; }
+        .md-content th, .md-content td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 13px; }
+        .md-content th { background: var(--s2); color: var(--purple); font-weight: 600; }
+        .md-content a { color: var(--accent); text-decoration: underline; }
+        .md-content blockquote { border-left: 3px solid var(--accent); margin: 0.6em 0; padding: 4px 12px; color: var(--muted); background: var(--accent-tint); border-radius: 0 8px 8px 0; }
       `}</style>
     </div>
   </>
