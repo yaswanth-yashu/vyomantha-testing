@@ -498,7 +498,7 @@ export default function CoursePage() {
               Explore Courses
             </h1>
             <p style={{ color: T.muted, marginTop: 6, fontSize: isMobile ? 14 : 15 }}>
-              Study structured paths curated by instructors, powered by LMS.
+              Study structured paths curated by instructors, powered by AI TUTOR.
             </p>
           </div>  
 

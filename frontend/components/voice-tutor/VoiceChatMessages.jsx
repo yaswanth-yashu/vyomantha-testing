@@ -77,7 +77,7 @@ export default function VoiceChatMessages({ conversation }) {
                   color: isStudent ? T.muted : T.purple,
                   textAlign: isStudent ? 'right' : 'left'
                 }}>
-                  {isStudent ? 'YOU' : 'LMS AI TUTOR'}
+                  {isStudent ? 'YOU' : 'AI TUTOR'}
                 </div>
                 <div style={{
                   display: 'inline-block', padding: '10px 14px',

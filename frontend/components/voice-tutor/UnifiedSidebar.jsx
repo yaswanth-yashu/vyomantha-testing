@@ -137,7 +137,7 @@ export default function UnifiedSidebar({ sessions, currentSessionId, onSelectSes
           </div>
           {(!isCollapsed || isMobile) && (
             <div>
-              <div style={{ color: T.text, fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em' }}>LMS AI</div>
+              <div style={{ color: T.text, fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em' }}>AI TUTOR</div>
               <div style={{ color: T.muted, fontSize: 10 }}>Tutor History</div>
             </div>
           )}

@@ -136,7 +136,7 @@ export default function LoginPage() {
               <GraduationCap size={28} color="#fff" />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: T.text, fontWeight: 800, fontSize: 22, letterSpacing: '-0.03em' }}>LMS Portal</span>
+              <span style={{ color: T.text, fontWeight: 800, fontSize: 22, letterSpacing: '-0.03em' }}>AI TUTOR Portal</span>
             </div>
             <div style={{ textAlign: 'center', marginTop: 4 }}>
               <h2 style={{ color: T.text, fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>Welcome Back</h2>
