@@ -10,16 +10,27 @@ import {
 import { T, COURSE, geminiCall, buildQuizPrompt, parseQuizOutput, getCourseDetails } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 import dynamic from 'next/dynamic';
-const Playground = dynamic(() => import('./Playground'), { ssr: false });
 import {
   getCourses, getQuizzes, submitQuizResponse, getQuizSubmissions,
   getAssignments, submitAssignmentResponse, getAssignmentSubmissions
 } from '@/lib/frappe';
+import PDFViewerModal from './PDFViewerModal';
+const Playground = dynamic(() => import('./Playground'), { ssr: false });
 
 export default function LessonPage({ lesson, completed = {}, onComplete }) {
   const router  = useRouter();
   const [next, setNext] = useState(null);
   const [isPlaygroundOpen, setIsPlaygroundOpen] = useState(false);
+  const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
+  const [selectedPdfResource, setSelectedPdfResource] = useState(null);
+
+  useEffect(() => {
+    if (lesson?.codingExercise?.hasExercise) {
+      setIsPlaygroundOpen(true);
+    } else {
+      setIsPlaygroundOpen(false);
+    }
+  }, [lesson?.id, lesson?.codingExercise?.hasExercise]);
   
   // Resolve module: prefer lesson.module, fall back to matching module in static COURSE
   const mod = lesson.module || COURSE.modules.find(m => m.lessons.some(l => l.id === lesson.id)) || COURSE.modules[0];
@@ -340,6 +351,49 @@ export default function LessonPage({ lesson, completed = {}, onComplete }) {
           ))}
         </div>
       </div>
+
+      {/* PDF Reference Resource Card */}
+      {lesson.pdf && (
+        <div style={{
+          background: `linear-gradient(135deg, ${T.accent}0a 0%, ${T.purple}0a 100%)`,
+          border: `1px solid ${T.accent}30`,
+          borderRadius: 14,
+          padding: '20px 24px',
+          marginBottom: 24,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16
+        }}>
+          <div>
+            <h3 style={{ color: T.text, fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>📄 Attached Study Materials</h3>
+            <p style={{ color: T.muted, fontSize: 12.5, margin: 0 }}>Review the reference PDF document provided for this lesson.</p>
+          </div>
+          <button
+            onClick={() => {
+              setSelectedPdfResource({ file_link: lesson.pdf, name: `${lesson.title} Reference PDF` });
+              setIsPdfViewerOpen(true);
+            }}
+            style={{
+              background: T.accent,
+              color: '#fff',
+              border: 'none',
+              padding: '8px 18px',
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(91, 140, 248, 0.2)',
+              transition: 'opacity 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = 0.9}
+            onMouseLeave={e => e.currentTarget.style.opacity = 1}
+          >
+            Open PDF Viewer
+          </button>
+        </div>
+      )}
 
       {/* ──────────────────────────────────────────────────────── */}
       {/* SECTION 1: Official Lesson Quiz (Frappe backend data) */}
@@ -790,12 +844,20 @@ export default function LessonPage({ lesson, completed = {}, onComplete }) {
 
       {isPlaygroundOpen && isMobile && (
         <div style={{ marginTop: 24, height: 400, flexShrink: 0 }}>
-          <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
+          <Playground
+            initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`}
+            codingExercise={lesson.codingExercise}
+            onVerifySuccess={() => onComplete(lesson.id)}
+          />
         </div>
       )}
       {isPlaygroundOpen && !isMobile && isTabletOrSmallDesktop && (
         <div style={{ marginTop: 32, height: 500, flexShrink: 0 }}>
-          <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
+          <Playground
+            initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`}
+            codingExercise={lesson.codingExercise}
+            onVerifySuccess={() => onComplete(lesson.id)}
+          />
         </div>
       )}
     </div>
@@ -808,9 +870,20 @@ export default function LessonPage({ lesson, completed = {}, onComplete }) {
         display: 'flex',
         flexDirection: 'column'
       }}>
-        <Playground initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`} />
+        <Playground
+          initialCode={`# Practice Python for: ${lesson.title}\n# Write your code here\n\n`}
+          codingExercise={lesson.codingExercise}
+          onVerifySuccess={() => onComplete(lesson.id)}
+        />
       </div>
     )}
+    {/* PDF Viewer Modal */}
+    <PDFViewerModal
+      isOpen={isPdfViewerOpen}
+      onClose={() => { setIsPdfViewerOpen(false); setSelectedPdfResource(null); }}
+      pdfResource={selectedPdfResource}
+    />
+
   </div>
 );
 }

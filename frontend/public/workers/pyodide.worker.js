@@ -54,24 +54,53 @@ self.onmessage = async function (event) {
       const traceRunner = `
 import sys
 import json
+import math
+import io
 
-def serialize_val(val):
+class TraceStdout:
+    def __init__(self):
+        self.buf = ""
+    def write(self, s):
+        self.buf += s
+    def flush(self):
+        pass
+
+def serialize_val(val, visited=None):
+    if visited is None:
+        visited = set()
+    val_id = id(val)
+    if val_id in visited:
+        return "<circular reference>"
+    if isinstance(val, float):
+        if math.isnan(val):
+            return "NaN"
+        elif math.isinf(val):
+            return "Infinity" if val > 0 else "-Infinity"
+        return val
     try:
         json.dumps(val, allow_nan=False)
         return val
     except:
-        if isinstance(val, (set, tuple)):
-            return [serialize_val(x) for x in val]
-        elif isinstance(val, list):
-            return [serialize_val(x) for x in val]
-        elif isinstance(val, dict):
-            return {str(k): serialize_val(v) for k, v in val.items()}
-        else:
-            return str(val)
+        visited.add(val_id)
+        try:
+            if isinstance(val, (set, tuple)):
+                return [serialize_val(x, visited) for x in val]
+            elif isinstance(val, list):
+                return [serialize_val(x, visited) for x in val]
+            elif isinstance(val, dict):
+                return {str(k): serialize_val(v, visited) for k, v in val.items()}
+            else:
+                return str(val)
+        finally:
+            visited.remove(val_id)
 
 def trace_code(code_string):
     trace_data = []
     step_counter = 0
+    
+    stdout_redirector = TraceStdout()
+    old_stdout = sys.stdout
+    sys.stdout = stdout_redirector
 
     def trace_lines(frame, event, arg):
         nonlocal step_counter
@@ -90,11 +119,12 @@ def trace_code(code_string):
                     "step": step_counter,
                     "line": frame.f_lineno,
                     "variables": local_vars,
+                    "stdout": stdout_redirector.buf,
                     "event": event
                 })
         return trace_lines
 
-    globals_dict = {}
+    globals_dict = {"__name__": "__main__"}
     locals_dict = {}
     
     sys.settrace(trace_lines)
@@ -105,10 +135,12 @@ def trace_code(code_string):
             "step": step_counter + 1,
             "line": 0,
             "error": str(e),
-            "variables": {}
+            "variables": {},
+            "stdout": stdout_redirector.buf
         })
     finally:
         sys.settrace(None)
+        sys.stdout = old_stdout
         
     return json.dumps(trace_data)
 `;

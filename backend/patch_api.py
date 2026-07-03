@@ -11,12 +11,11 @@ def main():
     with open(api_path, 'r') as f:
         content = f.read()
 
-    # Clean out any old definitions of our custom functions to avoid duplicates
     custom_funcs = [
         'get_google_auth_url', 'test_google_auth_traceback', 'get_api_file', 
         'execute_py', 'get_courses_optimized', 'get_course_syllabus_optimized',
         'sign_jwt', 'get_jwt', 'retrieve_secure_chunks_internal', 
-        'invalidate_permission_cache'
+        'invalidate_permission_cache', 'get_lms_students_optimized'
     ]
     for func_name in custom_funcs:
         if func_name in content:
@@ -217,6 +216,15 @@ def get_course_syllabus_optimized(course_id: str):
                         
                         pts = ["Key concept introduction."]
                         quiz_questions = []
+                        coding_exercise = {
+                            "hasExercise": False,
+                            "language": "python",
+                            "instruction": "",
+                            "starterCode": "",
+                            "solutionCode": "",
+                            "testCases": []
+                        }
+                        
                         notes = lDoc.get("instructor_notes")
                         if notes:
                             try:
@@ -226,6 +234,8 @@ def get_course_syllabus_optimized(course_id: str):
                                         pts = meta["pts"]
                                     if isinstance(meta.get("quizQuestions"), list):
                                         quiz_questions = meta["quizQuestions"]
+                                    if isinstance(meta.get("codingExercise"), dict):
+                                        coding_exercise = meta["codingExercise"]
                             except Exception:
                                 pass
                                 
@@ -236,7 +246,8 @@ def get_course_syllabus_optimized(course_id: str):
                             "vid": lDoc.get("youtube") or "rfscVS0vtbw",
                             "overview": lDoc.get("body") or "",
                             "pts": pts,
-                            "quizQuestions": quiz_questions
+                            "quizQuestions": quiz_questions,
+                            "codingExercise": coding_exercise
                         })
                     elif l_name:
                         lessons.append({
@@ -246,7 +257,15 @@ def get_course_syllabus_optimized(course_id: str):
                             "vid": "",
                             "overview": "",
                             "pts": [],
-                            "quizQuestions": []
+                            "quizQuestions": [],
+                            "codingExercise": {
+                                "hasExercise": False,
+                                "language": "python",
+                                "instruction": "",
+                                "starterCode": "",
+                                "solutionCode": "",
+                                "testCases": []
+                            }
                         })
                         
                 modules.append({
@@ -424,6 +443,22 @@ def invalidate_permission_cache(doc, method=None):
     course_id = doc.get("course") or doc.get("parent")
     if course_id:
         requests.get(f"{redis_url}/del/user:is_instructor:{{user_id}}:{{course_id}}".format(user_id=user_id, course_id=course_id), headers=headers)
+
+@frappe.whitelist(allow_guest=True)
+def get_lms_students_optimized():
+    import frappe
+    import traceback
+    try:
+        users = frappe.get_all("User", 
+                               fields=["name", "email", "full_name", "enabled"],
+                               filters=[["name", "not in", ["Administrator", "Guest"]], ["enabled", "=", 1]],
+                               limit_page_length=500)
+        return [{"username": u.email or u.name, "name": u.full_name or u.name} for u in users]
+    except Exception as e:
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
 """
 
     with open(api_path, 'w') as f:

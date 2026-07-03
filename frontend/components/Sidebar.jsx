@@ -16,8 +16,8 @@ const NAV = [
   { id: '/quizzes',       Icon: Award,         label: 'Quizzes'       },
   { id: '/assignments',   Icon: FileText,      label: 'Assignments'   },
   { id: '/resources',     Icon: FolderOpen,    label: 'Resources'     },
-  { id: '/general-tutor', Icon: Brain,         label: 'General Tutor' },
-  { id: '/coding-tutor',  Icon: Code2,         label: 'Coding Tutor'  },
+  { id: '/general-tutor', Icon: Brain,         label: 'Ask your AI TUTOR' },
+  { id: '/coding-tutor',  Icon: Code2,         label: 'Code with AI TUTOR'  },
   { id: '/jobs',          Icon: Briefcase,     label: 'Jobs'          },
   { id: '/progress',      Icon: BarChart3,     label: 'Progress'      },
 ];
@@ -71,21 +71,16 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
   const loadTutorSessions = () => {
     if (!isTutorPage) return;
     const textKey = isGeneralTutor ? 'general-tutor-sessions' : 'coding-tutor-sessions';
-    const voiceKey = isGeneralTutor ? 'voice-tutor-sessions' : 'voice-coding-tutor-sessions';
     const activeKey = isGeneralTutor ? 'current-general-tutor-session-id' : 'current-coding-tutor-session-id';
 
     try {
       const rawText = localStorage.getItem(textKey);
-      const rawVoice = localStorage.getItem(voiceKey);
       const textSess = rawText ? JSON.parse(rawText) : [];
-      const voiceSess = rawVoice ? JSON.parse(rawVoice) : [];
 
-      const text = textSess.map(s => ({ ...s, type: 'text' }));
-      const voice = voiceSess.map(s => ({ ...s, type: 'voice' }));
-      const all = [...text, ...voice];
+      const all = [...textSess];
       all.sort((a, b) => {
-        const ta = new Date(a.timestamp || a.startedAt || 0).getTime();
-        const tb = new Date(b.timestamp || b.startedAt || 0).getTime();
+        const ta = new Date(a.timestamp || 0).getTime();
+        const tb = new Date(b.timestamp || 0).getTime();
         return tb - ta;
       });
       setSessions(all);
@@ -105,16 +100,14 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
   // Synchronize tutor state on custom event update from GeneralTutor / CodingTutor
   useEffect(() => {
     const handleStateUpdate = (e) => {
-      const { currentSessionId: eventSid, textSessions, voiceSessions, type } = e.detail;
+      const { currentSessionId: eventSid, textSessions, type } = e.detail;
       const expectedType = isGeneralTutor ? 'general-tutor' : 'coding-tutor';
       if (type !== expectedType) return;
 
-      const text = (textSessions || []).map(s => ({ ...s, type: 'text' }));
-      const voice = (voiceSessions || []).map(s => ({ ...s, type: 'voice' }));
-      const all = [...text, ...voice];
+      const all = [...(textSessions || [])];
       all.sort((a, b) => {
-        const ta = new Date(a.timestamp || a.startedAt || 0).getTime();
-        const tb = new Date(b.timestamp || b.startedAt || 0).getTime();
+        const ta = new Date(a.timestamp || 0).getTime();
+        const tb = new Date(b.timestamp || 0).getTime();
         return tb - ta;
       });
       setSessions(all);
@@ -171,7 +164,7 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
   if (isMobile) {
     return (
       <MobileNav
-        title="LMS AI"
+        title="AI TUTOR"
         accent={T.accent}
         items={[
           ...NAV.map(({ id, Icon, label }) => ({
@@ -244,7 +237,7 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
             </div>
             {!isCollapsed && (
               <div>
-                <div style={{ color: T.text, fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>LMS AI</div>
+                <div style={{ color: T.text, fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>AI TUTOR</div>
                 <div style={{ color: T.muted, fontSize: 11 }}>Learning Platform</div>
               </div>
             )}
@@ -333,7 +326,7 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
                   transition: 'all 0.2s',
                   flexShrink: 0,
                 }}
-                title={`Expand for ${isGeneralTutor ? 'General Tutor' : 'Coding Tutor'}`}
+                title={`Expand for ${isGeneralTutor ? 'Ask your AI Tutor' : 'Code With AI Tutor'}`}
               >
                 {isGeneralTutor ? <Brain size={16} /> : <Code2 size={16} />}
               </button>
@@ -362,7 +355,7 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
                   {isGeneralTutor ? <Brain size={16} /> : <Code2 size={16} />}
-                  <span>{isGeneralTutor ? 'General Tutor' : 'Coding Tutor'}</span>
+                  <span>{isGeneralTutor ? 'Ask your AI Tutor' : 'Code with AI Tutor'}</span>
                 </div>
                 <ChevronDown
                   size={14}
@@ -451,10 +444,10 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
                 </button>
                 {sessions.map((session) => {
                   const isActive = session.id === currentSessionId;
-                  const isVoice = session.type === 'voice';
+                  const isVoice = session.messages?.some(m => m.isVoice || m.sender === 'student') || session.type === 'voice';
                   return (
                     <button
-                      key={session.type + '-' + session.id}
+                      key={'session-' + session.id}
                       onClick={() => handleSelectSession(session)}
                       style={{
                         width: 32,
@@ -547,10 +540,10 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                           {items.map((session) => {
                             const isActive = session.id === currentSessionId;
-                            const isVoice = session.type === 'voice';
+                            const isVoice = session.messages?.some(m => m.isVoice || m.sender === 'student') || session.type === 'voice';
                             return (
                               <button
-                                key={session.type + '-' + session.id}
+                                key={'session-' + session.id}
                                 onClick={() => handleSelectSession(session)}
                                 style={{
                                   width: '100%',
@@ -594,8 +587,8 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
                                   {session.label || 'Untitled'}
                                 </span>
                                 <span style={{ fontSize: 9, color: T.dim, flexShrink: 0 }}>
-                                  {isVoice ? 'Voice' : 'Text'}
-                                </span>
+                                  {isVoice ? 'Voice/Text' : 'Text'}
+                                  </span>
                               </button>
                             );
                           })}

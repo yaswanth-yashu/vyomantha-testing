@@ -8,7 +8,7 @@ import VoiceRobotVisualizer from './VoiceRobotVisualizer';
 import MobileNav from '@/components/MobileNav';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 
-const SESSIONS_KEY = 'voice-tutor-sessions';
+const SESSIONS_KEY = 'general-tutor-sessions';
 
 function loadSessions() {
   if (typeof window === 'undefined') return [];
@@ -17,7 +17,12 @@ function loadSessions() {
     if (!raw) return [];
     return JSON.parse(raw).map((s) => ({
       ...s,
-      messages: s.messages.map((m) => ({ ...m, timestamp: new Date(m.timestamp) })),
+      messages: s.messages.map((m) => ({
+        ...m,
+        sender: m.sender || (m.role === 'ai' ? 'tutor' : 'student'),
+        text: m.text || m.content || '',
+        timestamp: new Date(m.timestamp)
+      })),
     }));
   } catch { return []; }
 }
@@ -92,7 +97,12 @@ export default function VoiceAgentView({ onClose, initialSession, inline = false
   // Restore initial session passed from parent (e.g. when clicking a voice session from sidebar)
   useEffect(() => {
     if (initialSession && initialSession.messages) {
-      setConversation(initialSession.messages.map((m) => ({ ...m, timestamp: new Date(m.timestamp) })));
+      setConversation(initialSession.messages.map((m) => ({
+        ...m,
+        sender: m.sender || (m.role === 'ai' ? 'tutor' : 'student'),
+        text: m.text || m.content || '',
+        timestamp: new Date(m.timestamp)
+      })));
       setCurrentSentiment(null);
       if (initialSession.subject) setSelectedSubject(initialSession.subject);
       if (initialSession.language) setSelectedLanguage(initialSession.language);
@@ -109,22 +119,46 @@ export default function VoiceAgentView({ onClose, initialSession, inline = false
   const saveCurrentSession = useCallback(() => {
     if (conversation.length === 0) return;
     const sid = sessionId || voiceSessionIdRef.current || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+    if (!voiceSessionIdRef.current) voiceSessionIdRef.current = sid;
+
+    const normalizedMessages = conversation.map(m => ({
+      id: m.id || Date.now().toString(36),
+      role: m.sender === 'tutor' || m.role === 'ai' ? 'ai' : 'user',
+      content: m.text || m.content || '',
+      timestamp: m.timestamp || new Date().toISOString(),
+      isVoice: true
+    }));
+
     const session = {
       id: sid,
       label: generateLabel(conversation, selectedSubject),
       subject: selectedSubject,
       language: selectedLanguage,
-      startedAt: new Date().toISOString(),
-      messages: conversation,
+      timestamp: new Date().toISOString(),
+      messages: normalizedMessages,
+      type: 'text'
     };
+
     const updated = [session, ...sessions.filter((s) => s.id !== session.id)];
     setSessions(updated);
     saveSessions(updated);
-    
+
     // Call parent complete callback if provided
     if (onSessionComplete) {
       onSessionComplete(conversation);
     }
+
+    // Dispatch update event to Sidebar
+    try {
+      const event = new CustomEvent('tutor-state-update', {
+        detail: {
+          currentSessionId: sid,
+          textSessions: updated,
+          type: 'general-tutor'
+        }
+      });
+      window.dispatchEvent(event);
+    } catch (e) {}
 
     // Persist to Redis memory asynchronously
     fetch('/api/memory', {
@@ -134,7 +168,7 @@ export default function VoiceAgentView({ onClose, initialSession, inline = false
         action: 'save',
         sessionId: sid,
         userId: activeUserId,
-        messages: conversation.map(m => ({ role: m.sender === 'tutor' ? 'assistant' : 'user', content: m.text })),
+        messages: normalizedMessages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
       }),
     }).catch(() => {});
   }, [conversation, selectedSubject, selectedLanguage, sessions, activeUserId, sessionId, onSessionComplete]);
@@ -341,8 +375,8 @@ export default function VoiceAgentView({ onClose, initialSession, inline = false
   const voiceNavItems = [
     { href: '/',              Icon: Home,      label: 'Dashboard'     },
     { href: '/courses',       Icon: BookOpen,  label: 'Courses'       },
-    { href: '/general-tutor', Icon: Brain,     label: 'General Tutor' },
-    { href: '/coding-tutor',  Icon: Code2,     label: 'Coding Tutor'  },
+    { href: '/general-tutor', Icon: Brain,     label: 'Ask your AI Tutor' },
+    { href: '/coding-tutor',  Icon: Code2,     label: 'Code with AI Tutor'  },
     { href: '/progress',      Icon: BarChart3, label: 'Progress'      },
   ];
 

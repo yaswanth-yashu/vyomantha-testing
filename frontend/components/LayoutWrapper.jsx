@@ -117,7 +117,7 @@ export default function LayoutWrapper({ children }) {
             borderTopColor: 'var(--accent)',
             animation: 'spin 1s linear infinite'
           }} />
-          <div style={{ fontSize: 14, color: 'var(--muted)' }}>Loading LMS Portal...</div>
+          <div style={{ fontSize: 14, color: 'var(--muted)' }}>Loading AI TUTOR Portal...</div>
         </div>
       </div>
     );
