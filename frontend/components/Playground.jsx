@@ -67,13 +67,14 @@ export default function Playground({
       setExplanation(explanationOverride);
     }
   }, [explanationOverride]);
-  
+
   // Trace visualizer states
   const [traceData, setTraceData] = useState(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isTracing, setIsTracing] = useState(false);
-  
+  const [playSpeed, setPlaySpeed] = useState(1500); // 1500ms (1x), 1000ms (1.5x), 500ms (2x)
+
   const terminalElRef = useRef(null);
   const terminalInstanceRef = useRef(null);
   const fitAddonRef = useRef(null);
@@ -257,12 +258,12 @@ export default function Playground({
           }
           return prev + 1;
         });
-      }, 1500);
+      }, playSpeed);
     }
     return () => {
       if (playIntervalRef.current) clearInterval(playIntervalRef.current);
     };
-  }, [isPlaying, traceData]);
+  }, [isPlaying, traceData, playSpeed]);
 
   // Highlight and scroll active code line into view in CodeMirror editor
   useEffect(() => {
@@ -288,7 +289,7 @@ export default function Playground({
           view.dispatch({
             selection: { anchor: pos, head: pos }
           });
-        } catch (e) {}
+        } catch (e) { }
       }
     }
   }, [currentStep, traceData]);
@@ -368,7 +369,7 @@ export default function Playground({
     try {
       const systemPrompt = "You are an expert Python tutor. Explain the following Python code step-by-step. Keep your explanation concise, clear, and focused on how the code executes, data structures, and algorithms used. Do not include greetings. Use markdown.";
       const finalPrompt = `Please explain this Python code:\n\`\`\`python\n${codeText}\n\`\`\``;
-      
+
       let storedUserId = '';
       if (typeof window !== 'undefined') {
         storedUserId = localStorage.getItem('lms-user-id') || '';
@@ -393,7 +394,7 @@ export default function Playground({
       const decoder = new TextDecoder();
       let fullText = '';
       setExplanation('');
-      
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -417,15 +418,15 @@ export default function Playground({
       terminalInstanceRef.current.clear();
       terminalInstanceRef.current.writeln('\x1b[90mRunning script...\x1b[0m');
     }
-    
+
     // Start generating AI explanation in the background
     generateExplanationForCode(code);
-    
+
     // Setup tracing visualizer state to loading
     setIsTracing(true);
     setTraceData(null);
     setTraceError(null);
-    
+
     // Queue trace execution for when runCode finishes
     setPendingTraceCode(code);
 
@@ -468,6 +469,184 @@ except Exception as e:
     }
   };
 
+  // Dynamic sorting and array execution animator
+  const renderArrayVisualizer = (listKey, listVal, variables, prevVariables) => {
+    // 1. Find pointer variables pointing to indices in this list
+    const pointers = {};
+    Object.entries(variables).forEach(([k, v]) => {
+      if (typeof v === 'number' && v >= 0 && v < listVal.length && !k.startsWith('__') && k !== 'step_counter') {
+        if (!pointers[v]) pointers[v] = [];
+        pointers[v].push(k);
+      }
+    });
+
+    // 2. Detect swaps/changes
+    const prevListVal = prevVariables?.[listKey];
+    let actionType = "STEP";
+    let swapMessage = "";
+    
+    // Determine action type and message
+    const changedIndices = [];
+    if (prevListVal && JSON.stringify(prevListVal) !== JSON.stringify(listVal)) {
+      listVal.forEach((item, idx) => {
+        if (prevListVal[idx] !== item) {
+          changedIndices.push(idx);
+        }
+      });
+      if (changedIndices.length === 2) {
+        actionType = "SWAP";
+        swapMessage = `Switch ${listVal[changedIndices[0]]} ↔ ${listVal[changedIndices[1]]}`;
+      } else if (changedIndices.length > 0) {
+        actionType = "ASSIGN";
+        swapMessage = `Update [${changedIndices.join(', ')}]`;
+      }
+    } else {
+      const activePointers = Object.entries(pointers).flatMap(([idx, names]) => names);
+      if (activePointers.length >= 2) {
+        actionType = "COMPARE";
+        swapMessage = `Compare ${activePointers.join(' ↔ ')}`;
+      }
+    }
+
+    const actionColors = {
+      COMPARE: { text: '#5B8CF8', bg: 'rgba(91, 140, 248, 0.12)' },
+      SWAP: { text: '#22C5A0', bg: 'rgba(34, 197, 160, 0.12)' },
+      ASSIGN: { text: '#F5A95B', bg: 'rgba(245, 169, 91, 0.12)' },
+      STEP: { text: '#8892B0', bg: 'rgba(255, 255, 255, 0.05)' }
+    };
+    const actionStyle = actionColors[actionType] || actionColors.STEP;
+
+    // Draw compare-swap linker line if 2 active indices
+    const activeIndices = Object.keys(pointers).map(Number).sort((a, b) => a - b);
+    let linkerLine = null;
+    if (activeIndices.length >= 2) {
+      const idx1 = activeIndices[0];
+      const idx2 = activeIndices[activeIndices.length - 1];
+      const cellWidth = 42;
+      const gap = 10;
+      const stepWidth = cellWidth + gap; // 52px
+      const leftPos = idx1 * stepWidth + (cellWidth / 2);
+      const lineLength = (idx2 - idx1) * stepWidth;
+      const color = actionType === 'SWAP' ? '#F5A95B' : '#22C5A0';
+
+      linkerLine = (
+        <div style={{
+          position: 'absolute',
+          top: '17px', // center of the 34px tall pill
+          left: `${leftPos}px`,
+          width: `${lineLength}px`,
+          height: '2px',
+          borderTop: `2px dotted ${color}`,
+          zIndex: 0,
+          pointerEvents: 'none',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          transform: 'translateY(-1px)'
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, transform: 'translateX(-3px)' }} />
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, transform: 'translateX(3px)' }} />
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 14, background: '#090A0F', borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)', marginBottom: 16 }}>
+        {/* Dynamic Action Status Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10.5, color: '#8892B0', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              Visual Execution ({listKey})
+            </span>
+            <span style={{ fontSize: 9.5, color: actionStyle.text, background: actionStyle.bg, padding: '2px 6px', borderRadius: 4, fontWeight: 800 }}>
+              {actionType}
+            </span>
+          </div>
+          {swapMessage && (
+            <span style={{ fontSize: 12, color: actionStyle.text, fontWeight: 700, fontFamily: 'monospace' }}>
+              ⚡ {swapMessage}
+            </span>
+          )}
+        </div>
+
+        {/* Array Pill Track */}
+        <div style={{ display: 'flex', overflowX: 'auto', padding: '16px 4px 32px 4px', justifyContent: listVal.length <= 8 ? 'center' : 'flex-start', width: '100%' }} className="no-scrollbar">
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', position: 'relative' }}>
+            {linkerLine}
+            {listVal.map((item, idx) => {
+              const activePointers = pointers[idx] || [];
+              const isPointed = activePointers.length > 0;
+              const wasChanged = prevListVal !== undefined && prevListVal[idx] !== item;
+
+              let pillBg = '#131824';
+              let pillBorder = '1px solid rgba(91, 140, 248, 0.15)';
+              let textColor = '#8892B0';
+
+              if (isPointed) {
+                pillBg = actionType === 'SWAP' ? 'rgba(245, 169, 91, 0.12)' : 'rgba(34, 197, 160, 0.12)';
+                pillBorder = actionType === 'SWAP' ? '1px solid #F5A95B' : '1px solid #22C5A0';
+                textColor = actionType === 'SWAP' ? '#F5A95B' : '#22C5A0';
+              } else if (wasChanged) {
+                pillBg = 'rgba(245, 169, 91, 0.12)';
+                pillBorder = '1px solid #F5A95B';
+                textColor = '#F5A95B';
+              }
+
+              return (
+                <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 2 }}>
+                  <motion.div
+                    layout
+                    transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                    style={{
+                      width: 42,
+                      height: 34,
+                      borderRadius: 8,
+                      background: pillBg,
+                      border: pillBorder,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      color: textColor,
+                      boxShadow: isPointed ? (actionType === 'SWAP' ? '0 0 12px rgba(245, 169, 91, 0.15)' : '0 0 12px rgba(34, 197, 160, 0.15)') : 'none',
+                      userSelect: 'none'
+                    }}
+                  >
+                    {String(item)}
+                  </motion.div>
+
+                  <div style={{ fontSize: 9, color: '#4A5568', marginTop: 4, fontFamily: 'monospace' }}>
+                    [{idx}]
+                  </div>
+
+                  {isPointed && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'absolute', top: 48, zIndex: 10 }}>
+                      <div style={{ width: 0, height: 0, borderLeft: '3px solid transparent', borderRight: '3px solid transparent', borderBottom: '5px solid currentColor', color: textColor, marginBottom: 2 }} />
+                      <div style={{
+                        background: textColor,
+                        color: '#040508',
+                        fontSize: 9,
+                        fontWeight: 800,
+                        padding: '1px 4px',
+                        borderRadius: 3,
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'monospace',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                      }}>
+                        {activePointers.join(', ')}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Variable visualizer renderer
   const renderVariables = () => {
     if (!traceData || !traceData[currentStep]) return null;
@@ -493,8 +672,12 @@ except Exception as e:
 
     const prevStep = currentStep > 0 ? traceData[currentStep - 1] : null;
 
+    // Detect if we have a list to visualize
+    const listKey = keys.find(k => Array.isArray(variables[k]) && !k.startsWith('__'));
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {listKey && renderArrayVisualizer(listKey, variables[listKey], variables, prevStep?.variables)}
         {keys.map((key) => {
           const val = variables[key];
           const isArray = Array.isArray(val);
@@ -730,7 +913,7 @@ except Exception as e:
 
       {/* Main Split Area */}
       <div style={{ display: 'flex', flex: 1, height: 'calc(100% - 48px)', overflow: 'hidden', flexDirection: isMobile ? 'column' : 'row' }}>
-        
+
         {/* Left Side: Exercise Instructions (rendered only if exercise is enabled) */}
         {codingExercise?.hasExercise && (
           <div style={{
@@ -760,7 +943,7 @@ except Exception as e:
               <h4 style={{ color: '#22C5A0', fontSize: 13, fontWeight: 700, margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Test Cases & Assertions
               </h4>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {verifyState === 'success' && (
                   <div style={{ background: 'rgba(34, 197, 160, 0.1)', border: '1px solid rgba(34, 197, 160, 0.25)', borderRadius: 8, padding: 12, display: 'flex', alignItems: 'center', gap: 10, color: '#22C5A0', fontSize: 13, fontWeight: 600 }}>
@@ -778,7 +961,7 @@ except Exception as e:
 
                 {(codingExercise.testCases || []).map((tc, tcIdx) => {
                   const tcResult = assertionResults.find(r => r.expr === tc);
-                  let status = 'idle'; 
+                  let status = 'idle';
                   if (verifyState === 'verifying') status = 'verifying';
                   else if (tcResult) status = tcResult.passed ? 'passed' : 'failed';
 
@@ -797,7 +980,7 @@ except Exception as e:
                         {status === 'passed' && <CheckCircle size={13} color="#22C5A0" />}
                         {status === 'failed' && <X size={13} color="#F55B6B" />}
                         {status === 'idle' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#8892B0' }} />}
-                        
+
                         <span style={{ fontFamily: 'monospace', fontSize: 11.5, color: status === 'failed' ? '#F55B6B' : status === 'passed' ? '#22C5A0' : '#8892B0', wordBreak: 'break-all' }}>
                           {tc}
                         </span>
@@ -824,7 +1007,7 @@ except Exception as e:
           overflow: 'hidden'
         }}>
           {/* Editor & Bottom Panels (Vertical Flex) */}
-          <div 
+          <div
             ref={editorPanelRef}
             style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', overflow: 'hidden' }}
           >
@@ -1038,6 +1221,30 @@ except Exception as e:
                             {isPlaying ? 'Pause' : 'Auto Play'}
                           </button>
 
+                          {/* Autoplay Speed Controller */}
+                          <button
+                            onClick={() => {
+                              setPlaySpeed(prev => {
+                                if (prev === 1500) return 1000;
+                                if (prev === 1000) return 500;
+                                return 1500;
+                              });
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              color: '#8892B0',
+                              padding: '5px 8px',
+                              borderRadius: 4,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontFamily: 'monospace'
+                            }}
+                          >
+                            {playSpeed === 1500 ? '1.0x' : playSpeed === 1000 ? '1.5x' : '2.0x'}
+                          </button>
+
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button
                               disabled={currentStep === 0}
@@ -1077,6 +1284,33 @@ except Exception as e:
                         {/* Step Counts */}
                         <span style={{ fontSize: 11.5, color: '#8892B0', fontWeight: 600, fontFamily: 'monospace' }}>
                           Step {currentStep + 1} of {traceData.length}
+                        </span>
+                      </div>
+
+                      {/* Timeline Scrubber Slider */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 14px', background: '#090A0F', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, color: '#647298', fontFamily: 'monospace', userSelect: 'none' }}>01</span>
+                        <input 
+                          type="range"
+                          min={0}
+                          max={traceData.length - 1}
+                          value={currentStep}
+                          onChange={(e) => {
+                            setIsPlaying(false);
+                            setCurrentStep(parseInt(e.target.value));
+                          }}
+                          style={{
+                            flex: 1,
+                            height: 4,
+                            background: 'rgba(255,255,255,0.1)',
+                            borderRadius: 2,
+                            outline: 'none',
+                            cursor: 'pointer',
+                            accentColor: '#F5A95B'
+                          }}
+                        />
+                        <span style={{ fontSize: 10, color: '#647298', fontFamily: 'monospace', userSelect: 'none' }}>
+                          {String(traceData.length).padStart(2, '0')}
                         </span>
                       </div>
 

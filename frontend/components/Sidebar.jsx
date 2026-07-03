@@ -588,7 +588,7 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
                                 </span>
                                 <span style={{ fontSize: 9, color: T.dim, flexShrink: 0 }}>
                                   {isVoice ? 'Voice/Text' : 'Text'}
-                                </span>
+                                  </span>
                               </button>
                             );
                           })}
