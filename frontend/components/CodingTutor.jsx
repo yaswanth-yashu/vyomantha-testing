@@ -8,7 +8,7 @@ import { python } from '@codemirror/lang-python';
 import {
   Code2, Loader2, ChevronRight, Lock, FlipHorizontal,
   Paperclip, Mic, Image, HelpCircle, Send, AlignLeft, Sparkles, ChevronLeft,
-  BookOpen, BarChart3, Home, Zap, Brain, Award, FileText, FolderOpen, Briefcase
+  BookOpen, BarChart3, Home, Zap, Brain, Award, FileText, FolderOpen, Briefcase, X
 } from 'lucide-react';
 import {
   T, geminiCall,
@@ -960,13 +960,10 @@ export default function CodingTutor() {
           
           {/* Chat Container */}
           <div style={{
-            width: showSplitLayout ? `${chatWidthPercent}%` : 'auto',
-            flex: showSplitLayout ? 'none' : (showVerticalSplit ? '0 0 50%' : 1),
+            flex: 1,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            borderRight: showSplitLayout ? `1px solid ${T.border}` : 'none',
-            borderBottom: showVerticalSplit ? `1px solid ${T.border}` : 'none',
             background: T.bg
           }}>
             {/* ── HEADER ── */}
@@ -1433,53 +1430,87 @@ export default function CodingTutor() {
             </div>
           </div>
 
-          {/* Draggable Divider (Desktop only) */}
-          {showSplitLayout && (
-            <div
-              onMouseDown={handleMouseDown}
-              style={{
-                width: '6px',
-                cursor: 'col-resize',
-                background: 'var(--border)',
-                alignSelf: 'stretch',
-                zIndex: 10,
-                transition: 'background 0.2s',
-                flexShrink: 0
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--accent)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'var(--border)'}
-            />
-          )}
-
-          {/* Sandbox Playground (Desktop side-by-side) */}
-          {showSplitLayout && (
-            <div style={{ width: `${100 - chatWidthPercent}%`, flex: 'none', height: '100%', background: '#090A0F', overflow: 'hidden' }}>
-              <Playground 
-                initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} 
-                codeOverride={codeOverride}
-                explanationOverride={explanationOverride}
-                onTraceComplete={() => {
-                  setCodeOverride(null);
-                  setExplanationOverride(null);
-                }}
-                onCodeChange={setCurrentSandboxCode}
-              />
-            </div>
-          )}
-
-          {/* Sandbox Playground (Tablet / Mobile vertical stack) */}
-          {showVerticalSplit && (
-            <div style={{ flex: '0 0 50%', height: '50%', background: '#090A0F', borderTop: `1px solid ${T.border}`, overflow: 'hidden' }}>
-              <Playground 
-                initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} 
-                codeOverride={codeOverride}
-                explanationOverride={explanationOverride}
-                onTraceComplete={() => {
-                  setCodeOverride(null);
-                  setExplanationOverride(null);
-                }}
-                onCodeChange={setCurrentSandboxCode}
-              />
+          {/* Floating Sandbox Modal Overlay */}
+          {isPlaygroundOpen && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              background: 'rgba(4, 5, 8, 0.7)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: isMobile ? '10px' : '40px'
+            }}>
+              {/* Floating Window Container */}
+              <div style={{
+                width: '100%',
+                maxWidth: '1440px',
+                height: '100%',
+                background: '#06080C',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.5)'
+              }}>
+                {/* Header */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 18px',
+                  background: '#080A0E',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                  flexShrink: 0
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.amber }} />
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#F8FAFC', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: 'monospace' }}>
+                      Interactive Code Tutor Sandbox
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsPlaygroundOpen(false)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      color: '#8892B0',
+                      borderRadius: '50%',
+                      width: 26,
+                      height: 26,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#F55B6B'; e.currentTarget.style.background = 'rgba(245, 91, 107, 0.1)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = '#8892B0'; e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; }}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                
+                {/* Playground Canvas Body */}
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <Playground 
+                    initialCode={`# Python Coding Sandbox\n# Write python code here and run it!\n\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("Seshu")\n`} 
+                    codeOverride={codeOverride}
+                    explanationOverride={explanationOverride}
+                    onTraceComplete={() => {
+                      setCodeOverride(null);
+                      setExplanationOverride(null);
+                    }}
+                    onCodeChange={setCurrentSandboxCode}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
