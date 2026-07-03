@@ -650,7 +650,7 @@ except Exception as e:
   // Variable visualizer renderer
   const renderVariables = () => {
     if (!traceData || !traceData[currentStep]) return null;
-    const { variables = {}, error } = traceData[currentStep];
+    const { variables = {}, error, line, stdout = "" } = traceData[currentStep];
     
     if (error) {
       return (
@@ -662,143 +662,212 @@ except Exception as e:
     }
 
     const keys = Object.keys(variables);
-    if (keys.length === 0) {
-      return (
-        <div style={{ color: '#647298', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
-          No local variables defined in this step.
-        </div>
-      );
+    const prevStep = currentStep > 0 ? traceData[currentStep - 1] : null;
+
+    // 1. Current Code Line Inspector
+    const lines = code.split('\n');
+    const activeLineText = lines[line - 1]?.trim() || '';
+    
+    let lineActionType = "EXECUTE";
+    if (activeLineText.startsWith('for ') || activeLineText.startsWith('while ')) {
+      lineActionType = "LOOP EVALUATION";
+    } else if (activeLineText.startsWith('if ') || activeLineText.startsWith('elif ') || activeLineText.startsWith('else:')) {
+      lineActionType = "BRANCH DECISION";
+    } else if (activeLineText.includes('print(')) {
+      lineActionType = "PRINT OUTPUT";
+    } else if (activeLineText.includes('=')) {
+      lineActionType = "VARIABLE ASSIGN";
+    } else if (activeLineText.startsWith('def ')) {
+      lineActionType = "FUNCTION DECLARE";
+    } else if (activeLineText.startsWith('return ')) {
+      lineActionType = "FUNCTION RETURN";
     }
 
-    const prevStep = currentStep > 0 ? traceData[currentStep - 1] : null;
+    const lineInspector = activeLineText ? (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.05)', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 9.5, color: '#8892B0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Active Line {line}</span>
+          <span style={{ fontSize: 9, color: '#F5A95B', background: 'rgba(245, 169, 91, 0.1)', padding: '2px 6px', borderRadius: 4, fontWeight: 800, letterSpacing: '0.04em' }}>{lineActionType}</span>
+        </div>
+        <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#E2E8F0', whiteSpace: 'pre-wrap', wordBreak: 'break-all', padding: '4px 8px', background: '#090A0F', borderRadius: 6, borderLeft: '3px solid #F5A95B' }}>
+          {activeLineText}
+        </div>
+      </div>
+    ) : null;
 
     // Detect if we have a list to visualize
     const listKey = keys.find(k => Array.isArray(variables[k]) && !k.startsWith('__'));
 
+    // Separate lists and scalars
+    const scalarKeys = keys.filter(k => {
+      const val = variables[k];
+      return !Array.isArray(val) && (typeof val !== 'object' || val === null);
+    });
+
+    const dictKeys = keys.filter(k => {
+      const val = variables[k];
+      return typeof val === 'object' && val !== null && !Array.isArray(val);
+    });
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Active Line Code Block */}
+        {lineInspector}
+
+        {/* Array execution animator (if array exists) */}
         {listKey && renderArrayVisualizer(listKey, variables[listKey], variables, prevStep?.variables)}
-        {keys.map((key) => {
+
+        {/* Memory Stack Variable Grid (Scalar Values) */}
+        {scalarKeys.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 10 }}>
+            <div style={{ fontSize: 9.5, color: '#8892B0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 6, marginBottom: 4 }}>
+              STACK MEMORY REGISTER
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {scalarKeys.map((key) => {
+                const val = variables[key];
+                const prevVal = prevStep ? prevStep.variables?.[key] : undefined;
+                const isChanged = prevVal !== undefined && JSON.stringify(prevVal) !== JSON.stringify(val);
+                const valType = typeof val;
+                
+                const borderStyle = isChanged ? '1px solid rgba(245, 169, 91, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)';
+                const shadowStyle = isChanged ? '0 0 10px rgba(245, 169, 91, 0.1)' : 'none';
+                const valColor = isChanged ? '#F5A95B' : (valType === 'boolean' ? '#22C5A0' : (valType === 'number' ? '#5B8CF8' : '#F5A95B'));
+
+                return (
+                  <motion.div
+                    key={key}
+                    layout
+                    className="variable-card"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      background: '#0D111A',
+                      border: borderStyle,
+                      boxShadow: shadowStyle,
+                      borderRadius: 8,
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <span style={{ fontWeight: 700, color: '#8892B0', fontSize: 12, fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {key}
+                        <span style={{ fontSize: 8, color: valType === 'number' ? '#5B8CF8' : valType === 'boolean' ? '#22C5A0' : '#F5A95B', textTransform: 'uppercase', opacity: 0.6 }}>
+                          {valType}
+                        </span>
+                      </span>
+                    </div>
+
+                    {/* Value slot with vertical shifting AnimatePresence animation */}
+                    <div style={{
+                      minWidth: 40,
+                      height: 24,
+                      background: '#161B26',
+                      border: isChanged ? '1px solid rgba(245, 169, 91, 0.25)' : '1px solid rgba(255,255,255,0.04)',
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 6px',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      <AnimatePresence mode="popLayout" initial={false}>
+                        <motion.span
+                          key={JSON.stringify(val)} // key triggers AnimatePresence on update
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+                          style={{
+                            fontSize: 11.5,
+                            color: valColor,
+                            fontWeight: 800,
+                            fontFamily: 'monospace',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {String(val)}
+                        </motion.span>
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Dicts Visualizer */}
+        {dictKeys.map((key) => {
           const val = variables[key];
-          const isArray = Array.isArray(val);
-          const isDict = typeof val === 'object' && val !== null && !isArray;
           const prevVal = prevStep ? prevStep.variables?.[key] : undefined;
           const isChanged = prevVal !== undefined && JSON.stringify(prevVal) !== JSON.stringify(val);
-
           const borderStyle = isChanged ? '1px solid rgba(245, 169, 91, 0.4)' : '1px solid rgba(255, 255, 255, 0.06)';
           const shadowStyle = isChanged ? '0 0 12px rgba(245, 169, 91, 0.15)' : 'none';
-
-          if (isArray) {
-            return (
-              <motion.div
-                key={key}
-                layout
-                animate={{ scale: isChanged ? [1, 1.03, 1] : 1 }}
-                transition={{ duration: 0.3 }}
-                className="variable-card"
-                style={{ background: '#0D111A', border: borderStyle, boxShadow: shadowStyle, borderRadius: 8, padding: 12 }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, color: '#8892B0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{key} (List)</div>
-                  {isChanged && <span style={{ fontSize: 9, color: '#F5A95B', background: 'rgba(245, 169, 91, 0.12)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Modified</span>}
-                </div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {val.map((item, idx) => {
-                    const prevItem = Array.isArray(prevVal) ? prevVal[idx] : undefined;
-                    const isItemChanged = prevItem !== undefined && prevItem !== item;
-                    return (
-                      <motion.div
-                        key={idx}
-                        animate={{ scale: isItemChanged ? [1, 1.15, 1] : 1 }}
-                        transition={{ duration: 0.3 }}
-                        style={{
-                          minWidth: 32,
-                          height: 32,
-                          padding: '0 6px',
-                          borderRadius: 6,
-                          background: '#161B26',
-                          border: isItemChanged ? `1px solid rgba(245, 169, 91, 0.6)` : `1px solid rgba(91, 140, 248, 0.25)`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 12.5,
-                          fontWeight: 700,
-                          color: isItemChanged ? '#F5A95B' : '#5B8CF8'
-                        }}
-                      >
-                        {String(item)}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            );
-          }
-
-          if (isDict) {
-            return (
-              <motion.div
-                key={key}
-                layout
-                animate={{ scale: isChanged ? [1, 1.03, 1] : 1 }}
-                transition={{ duration: 0.3 }}
-                className="variable-card"
-                style={{ background: '#0D111A', border: borderStyle, boxShadow: shadowStyle, borderRadius: 8, padding: 12 }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, color: '#8892B0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{key} (Dict)</div>
-                  {isChanged && <span style={{ fontSize: 9, color: '#F5A95B', background: 'rgba(245, 169, 91, 0.12)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Modified</span>}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {Object.entries(val).map(([k, v]) => {
-                    const prevSubVal = prevVal && typeof prevVal === 'object' ? prevVal[k] : undefined;
-                    const isSubValChanged = prevSubVal !== undefined && prevSubVal !== v;
-                    return (
-                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, borderBottom: `1px solid rgba(255, 255, 255, 0.05)`, padding: '3px 0' }}>
-                        <span style={{ color: '#8892B0', fontFamily: 'monospace' }}>{k}</span>
-                        <motion.span
-                          animate={{ color: isSubValChanged ? '#F5A95B' : '#DDE3F2' }}
-                          style={{ fontWeight: 600, fontFamily: 'monospace' }}
-                        >
-                          {String(v)}
-                        </motion.span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            );
-          }
-
-          const valType = typeof val;
-          const valColor = isChanged ? '#F5A95B' : (valType === 'boolean' ? '#22C5A0' : (valType === 'number' ? '#5B8CF8' : '#F5A95B'));
 
           return (
             <motion.div
               key={key}
               layout
-              animate={{ scale: isChanged ? [1, 1.05, 1] : 1 }}
+              animate={{ scale: isChanged ? [1, 1.03, 1] : 1 }}
               transition={{ duration: 0.3 }}
               className="variable-card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 12px',
-                background: '#0D111A',
-                border: borderStyle,
-                boxShadow: shadowStyle,
-                borderRadius: 8
-              }}
+              style={{ background: '#0D111A', border: borderStyle, boxShadow: shadowStyle, borderRadius: 8, padding: 12 }}
             >
-              <span style={{ fontWeight: 600, color: '#8892B0', fontSize: 12.5, fontFamily: 'monospace', display: 'flex', alignItems: 'center' }}>
-                {key}
-                {isChanged && <span style={{ fontSize: 8, color: '#F5A95B', background: 'rgba(245, 169, 91, 0.12)', padding: '1px 4px', borderRadius: 3, fontWeight: 700, marginLeft: 6 }}>Modified</span>}
-              </span>
-              <span style={{ fontSize: 12.5, color: valColor, fontWeight: 700, fontFamily: 'monospace' }}>{String(val)}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <div style={{ fontSize: 11, color: '#8892B0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{key} (Dict)</div>
+                {isChanged && <span style={{ fontSize: 9, color: '#F5A95B', background: 'rgba(245, 169, 91, 0.12)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Modified</span>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {Object.entries(val).map(([k, v]) => {
+                  const prevSubVal = prevVal && typeof prevVal === 'object' ? prevVal[k] : undefined;
+                  const isSubValChanged = prevSubVal !== undefined && prevSubVal !== v;
+                  return (
+                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, borderBottom: `1px solid rgba(255, 255, 255, 0.05)`, padding: '3px 0' }}>
+                      <span style={{ color: '#8892B0', fontFamily: 'monospace' }}>{k}</span>
+                      <motion.span
+                        animate={{ color: isSubValChanged ? '#F5A95B' : '#DDE3F2' }}
+                        style={{ fontWeight: 600, fontFamily: 'monospace' }}
+                      >
+                        {String(v)}
+                      </motion.span>
+                    </div>
+                  );
+                })}
+              </div>
             </motion.div>
           );
         })}
+
+        {/* Stdout Console output */}
+        {stdout && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: '#020204', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', marginTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+              <span style={{ fontSize: 9.5, color: '#647298', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>OUTPUT STREAM CONSOLE</span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#F55B6B' }} />
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#F5A95B' }} />
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C5A0' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: 'monospace', fontSize: 12, color: '#22C5A0', maxHeight: 110, overflowY: 'auto', padding: '4px 6px' }} className="no-scrollbar">
+              {stdout.split('\n').filter(l => l.length > 0).map((line, li) => (
+                <motion.div
+                  key={li}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.18 }}
+                  style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                >
+                  {line}
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };

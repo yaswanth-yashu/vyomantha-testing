@@ -91,3 +91,30 @@ This is the core rendering canvas that displays lists as interactive animated ce
     - `lineLength = (idx2 - idx1) * 52px` (distance to the center of the second cell)
     - `top = 17px` (center height of the `34px` cell container)
 - **Spring Layout Animations:** Uses Framer Motion's `<motion.div layout>` tag on the array cells. When the array elements swap indices, Framer Motion reads the new bounding box coordinates and smoothly animates the elements sliding horizontally into their new positions.
+
+---
+
+### C. Active Code Line Inspector
+- **Line Text Extraction:** Splits the source code by newlines and fetches the exact line string matching `traceData[currentStep].line`.
+- **Instruction Classification:** Detects code syntax patterns to present descriptive operation badges:
+  - `LOOP EVALUATION` (e.g. `for i in range(10)`)
+  - `BRANCH DECISION` (e.g. `if x > 10`)
+  - `VARIABLE ASSIGN` (e.g. `y = x * 2`)
+  - `PRINT OUTPUT` (e.g. `print(y)`)
+  - `FUNCTION DECLARE`/`RETURN` (e.g. `def add()`, `return result`)
+
+---
+
+### D. Stack Memory Register (Scalar Variables)
+- **Visual Memory Cells:** Scalar variables (integers, strings, booleans, floats) are organized in a clean 2-column grid resembling computer memory registers.
+- **Value Shifting Transitions:** The value slot uses Framer Motion's `<AnimatePresence mode="popLayout">`. When a variable updates:
+  - The old value slides up and fades out.
+  - The new value slides in from the bottom with a springy spring curve (`stiffness: 450, damping: 25`).
+  - The border flashes amber and pulses to catch the user's attention.
+
+---
+
+### E. Output Stream Console (stdout)
+- **Worker Redirection Buffer:** Python stdout writes are intercepted inside a redirected buffer object inside the worker script.
+- **Console Feed:** If printed outputs are present at the current execution step, a simulated CRT dark console window renders in the visualizer tab. Lines fade and slide in dynamically as the execution player runs.
+

@@ -55,6 +55,15 @@ self.onmessage = async function (event) {
 import sys
 import json
 import math
+import io
+
+class TraceStdout:
+    def __init__(self):
+        self.buf = ""
+    def write(self, s):
+        self.buf += s
+    def flush(self):
+        pass
 
 def serialize_val(val, visited=None):
     if visited is None:
@@ -88,6 +97,10 @@ def serialize_val(val, visited=None):
 def trace_code(code_string):
     trace_data = []
     step_counter = 0
+    
+    stdout_redirector = TraceStdout()
+    old_stdout = sys.stdout
+    sys.stdout = stdout_redirector
 
     def trace_lines(frame, event, arg):
         nonlocal step_counter
@@ -106,6 +119,7 @@ def trace_code(code_string):
                     "step": step_counter,
                     "line": frame.f_lineno,
                     "variables": local_vars,
+                    "stdout": stdout_redirector.buf,
                     "event": event
                 })
         return trace_lines
@@ -121,10 +135,12 @@ def trace_code(code_string):
             "step": step_counter + 1,
             "line": 0,
             "error": str(e),
-            "variables": {}
+            "variables": {},
+            "stdout": stdout_redirector.buf
         })
     finally:
         sys.settrace(None)
+        sys.stdout = old_stdout
         
     return json.dumps(trace_data)
 `;
