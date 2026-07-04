@@ -86,11 +86,12 @@ def publish_status(document_id, status, error_message=None):
         print(f"Failed to publish status via Redis: {e}")
 
 def get_embedding_with_retry(text, attempt=0, retries=5, base_delay=1):
-    api_key = get_rotated_key(attempt)
-    if not api_key:
-        raise Exception("No active Gemini API keys configured.")
-        
     for i in range(retries):
+        # Rotate key on every retry attempt to handle rate limits dynamically
+        api_key = get_rotated_key(attempt + i)
+        if not api_key:
+            raise Exception("No active Gemini API keys configured.")
+            
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={api_key}"
             headers = {"Content-Type": "application/json"}
@@ -129,10 +130,6 @@ def get_embedding_with_retry(text, attempt=0, retries=5, base_delay=1):
     raise Exception("Failed to fetch embedding after max retries.")
 
 def get_batch_embeddings_with_retry(texts, attempt=0, retries=5, base_delay=1):
-    api_key = get_rotated_key(attempt)
-    if not api_key:
-        raise Exception("No active Gemini API keys configured.")
-        
     requests_list = []
     for t in texts:
         requests_list.append({
@@ -142,6 +139,11 @@ def get_batch_embeddings_with_retry(texts, attempt=0, retries=5, base_delay=1):
         })
         
     for i in range(retries):
+        # Rotate key on every retry attempt to handle rate limits dynamically
+        api_key = get_rotated_key(attempt + i)
+        if not api_key:
+            raise Exception("No active Gemini API keys configured.")
+            
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key={api_key}"
             headers = {"Content-Type": "application/json"}
