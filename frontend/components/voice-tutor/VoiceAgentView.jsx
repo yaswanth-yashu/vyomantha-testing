@@ -3,8 +3,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Home, BookOpen, Brain, Code2, BarChart3, Zap, ArrowLeft } from 'lucide-react';
 import { T } from '@/lib/lms-data';
+import dynamic from 'next/dynamic';
 import VoiceChatMessages from './VoiceChatMessages';
-import VoiceRobotVisualizer from './VoiceRobotVisualizer';
+
+const VoiceRobotVisualizer = dynamic(() => import('./VoiceRobotVisualizer'), {
+  ssr: false,
+  loading: () => <div className="h-48 flex items-center justify-center text-purple-400">Loading visualizer...</div>
+});
 import MobileNav from '@/components/MobileNav';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
 
