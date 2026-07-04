@@ -31,7 +31,6 @@ services:
       - frappe-bench-data:/home/frappe
     ports:
       - 8080:8000
-      - 9000:9000
 
 volumes:
   # mariadb-data:

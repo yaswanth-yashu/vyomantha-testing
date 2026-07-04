@@ -57,6 +57,12 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Gemini API key is not configured.' }, { status: 500 });
     }
 
+    // Start Redis history and memories queries in parallel with the embedding generation to reduce latency
+    const redisPromise = Promise.all([
+      loadHistory(sessionId),
+      recall(userId),
+    ]);
+
     let ragContext = '';
 
     try {
@@ -96,11 +102,24 @@ export async function POST(request) {
           console.warn(`[TutorStream] Retrieved ${chunks.length} secure chunks.`);
           
           if (chunks.length > 0) {
-            ragContext = '\n\nUse the following document segments as your knowledge context to answer the student\'s question:\n';
-            chunks.forEach(chunk => {
-              ragContext += `[Source: Page ${chunk.page_number}] ${chunk.content}\n`;
-            });
-            ragContext += '\nUse the provided context to answer the question when relevant and cite page numbers. If the student\'s question is unrelated to the context or cannot be answered using it, use your own general knowledge to answer directly, but clarify that it is from general knowledge rather than the document.';
+            // Deduplicate chunks by content
+            const uniqueChunks = [];
+            const seenContents = new Set();
+            for (const chunk of chunks) {
+              const cleanContent = chunk.content.trim();
+              if (!seenContents.has(cleanContent)) {
+                seenContents.add(cleanContent);
+                uniqueChunks.push(chunk);
+              }
+            }
+
+            if (uniqueChunks.length > 0) {
+              ragContext = '\n\nUse the following document segments as your knowledge context to answer the student\'s question:\n';
+              uniqueChunks.forEach(chunk => {
+                ragContext += `[Source: Page ${chunk.page_number}] ${chunk.content}\n`;
+              });
+              ragContext += '\nUse the provided context to answer the question when relevant and cite page numbers. If the student\'s question is unrelated to the context or cannot be answered using it, use your own general knowledge to answer directly, but clarify that it is from general knowledge rather than the document.';
+            }
           }
         } else {
           console.error(`[TutorStream] RLS API query failed: ${rlsResponse.status} ${rlsResponse.statusText}`);
@@ -110,11 +129,8 @@ export async function POST(request) {
       console.error("[TutorStream] RAG retrieval failed, falling back to plain chat:", e);
     }
 
-    // 3. Load conversation history and facts
-    const [history, memories] = await Promise.all([
-      loadHistory(sessionId),
-      recall(userId),
-    ]);
+    // 3. Await the pre-started conversation history and facts
+    const [history, memories] = await redisPromise;
     const memoryCtx = buildMemoryContext(history, memories);
     
     // Construct final system instructions incorporating RAG context

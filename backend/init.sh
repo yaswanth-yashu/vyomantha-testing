@@ -58,13 +58,25 @@ EOF
         echo "worker: bench worker --queue short,default,long" >> ./Procfile
     fi
     
+    # Remove socketio from Procfile
+    sed -i '/socketio/d' ./Procfile
+    
     # Install queue worker dependencies
     ./env/bin/pip install pypdf boto3 pymysql python-Levenshtein || true
+    ./env/bin/pip cache purge || true
+    
     # Start the background queue worker (supports scaling via env var)
     CONCURRENCY=${QUEUE_WORKER_CONCURRENCY:-2}
     echo "Starting $CONCURRENCY background queue workers..."
     for i in $(seq 1 $CONCURRENCY); do
         ./env/bin/python /workspace/queue_worker.py &
+    done
+    
+    # Rotate logs exceeding 50MB to preserve crash trail
+    find logs/ sites/*/logs/ -name "*.log" -size +50M 2>/dev/null | while read -r logfile; do
+        echo "Rotating large log file: $logfile"
+        mv "$logfile" "$logfile.1" 2>/dev/null || true
+        truncate -s 0 "$logfile" 2>/dev/null || true
     done
     
     bench start
@@ -124,6 +136,9 @@ bench set-config -g ignore_csrf 1
     # Consolidate background workers to run in a single process (saves ~160MB+ RAM)
     sed -i '/worker_/d' ./Procfile
     echo "worker: bench worker --queue short,default,long" >> ./Procfile
+    
+    # Remove socketio from Procfile
+    sed -i '/socketio/d' ./Procfile
 
 # Keep default bench serve --port 8000 (no host modification needed)
 
@@ -203,11 +218,20 @@ touch "sites/lms.localhost/.migrated"
 
 # Install queue worker dependencies
 ./env/bin/pip install pypdf boto3 pymysql python-Levenshtein || true
+./env/bin/pip cache purge || true
+
 # Start the background queue worker (supports scaling via env var)
 CONCURRENCY=${QUEUE_WORKER_CONCURRENCY:-2}
 echo "Starting $CONCURRENCY background queue workers..."
 for i in $(seq 1 $CONCURRENCY); do
     ./env/bin/python /workspace/queue_worker.py &
+done
+
+# Rotate logs exceeding 50MB to preserve crash trail
+find logs/ sites/*/logs/ -name "*.log" -size +50M 2>/dev/null | while read -r logfile; do
+    echo "Rotating large log file: $logfile"
+    mv "$logfile" "$logfile.1" 2>/dev/null || true
+    truncate -s 0 "$logfile" 2>/dev/null || true
 done
 
 # Start the headless backend server

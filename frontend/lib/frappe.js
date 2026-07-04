@@ -19,18 +19,33 @@ const DEFAULT_COURSES = [
 
 // Client-side cache for optimized loading
 const clientCache = {
-  courses: null,
-  coursesTimestamp: 0,
-  syllabus: {}, // courseId -> { data, timestamp }
+  courses: {},          // Map of userId -> list
+  coursesTimestamp: {}, // Map of userId -> timestamp
+  syllabus: {},         // Map of courseId -> { data, timestamp }
 };
+
+// Helper to get active user ID to scope cache keys
+function getActiveUserId() {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('frappe_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.email || parsed.name || 'anonymous';
+      }
+    } catch (e) {}
+  }
+  return 'anonymous';
+}
 
 // Helper to invalidate cache
 export function invalidateCoursesCache() {
-  clientCache.courses = null;
-  clientCache.coursesTimestamp = 0;
+  const userId = getActiveUserId();
+  delete clientCache.courses[userId];
+  delete clientCache.coursesTimestamp[userId];
   if (typeof window !== 'undefined') {
-    localStorage.removeItem('cached_courses_list');
-    localStorage.removeItem('cached_courses_timestamp');
+    localStorage.removeItem(`cached_courses_list_${userId}`);
+    localStorage.removeItem(`cached_courses_timestamp_${userId}`);
   }
 }
 
@@ -275,6 +290,7 @@ export async function getEnrolledCourses() {
  */
 export async function getCourses(options = {}) {
   const forceRefresh = options.forceRefresh || (typeof window !== 'undefined' && window.location.pathname.includes('/admin'));
+  const userId = getActiveUserId();
 
   let locallyDeleted = [];
   if (typeof window !== 'undefined') {
@@ -286,21 +302,21 @@ export async function getCourses(options = {}) {
   // Check cache first
   const now = Date.now();
   if (typeof window !== 'undefined' && !forceRefresh) {
-    if (!clientCache.courses) {
+    if (!clientCache.courses[userId]) {
       try {
-        const cachedStr = localStorage.getItem('cached_courses_list');
-        const cachedTs = Number(localStorage.getItem('cached_courses_timestamp') || '0');
+        const cachedStr = localStorage.getItem(`cached_courses_list_${userId}`);
+        const cachedTs = Number(localStorage.getItem(`cached_courses_timestamp_${userId}`) || '0');
         if (cachedStr && cachedTs) {
-          clientCache.courses = JSON.parse(cachedStr);
-          clientCache.coursesTimestamp = cachedTs;
+          clientCache.courses[userId] = JSON.parse(cachedStr);
+          clientCache.coursesTimestamp[userId] = cachedTs;
         }
       } catch (e) {}
     }
   }
 
-  // If cache is valid (within 15 seconds) and we are not forcing refresh, return it instantly
-  if (!forceRefresh && clientCache.courses && (now - clientCache.coursesTimestamp < 15000)) {
-    return clientCache.courses.filter(c => !locallyDeleted.includes(c.id));
+  // If cache is valid (within 5 minutes / 300,000ms) and we are not forcing refresh, return it instantly
+  if (!forceRefresh && clientCache.courses[userId] && (now - clientCache.coursesTimestamp[userId] < 300000)) {
+    return clientCache.courses[userId].filter(c => !locallyDeleted.includes(c.id));
   }
 
   const fetchPromise = (async () => {
@@ -436,22 +452,22 @@ export async function getCourses(options = {}) {
     }
 
     // Update Cache
-    clientCache.courses = list;
-    clientCache.coursesTimestamp = Date.now();
+    clientCache.courses[userId] = list;
+    clientCache.coursesTimestamp[userId] = Date.now();
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('cached_courses_list', JSON.stringify(list));
-        localStorage.setItem('cached_courses_timestamp', String(clientCache.coursesTimestamp));
+        localStorage.setItem(`cached_courses_list_${userId}`, JSON.stringify(list));
+        localStorage.setItem(`cached_courses_timestamp_${userId}`, String(clientCache.coursesTimestamp[userId]));
       } catch (e) {}
     }
 
     return list.filter(c => !locallyDeleted.includes(c.id));
   })();
 
-  if (!forceRefresh && clientCache.courses) {
+  if (!forceRefresh && clientCache.courses[userId]) {
     // Run background refresh silently
     fetchPromise.catch(e => console.warn("Background courses refresh failed:", e));
-    return clientCache.courses.filter(c => !locallyDeleted.includes(c.id));
+    return clientCache.courses[userId].filter(c => !locallyDeleted.includes(c.id));
   }
 
   return fetchPromise;
@@ -760,49 +776,28 @@ export async function getCourseSyllabus(courseId, options = {}) {
             const chDoc = await frappeRestGet(`Course Chapter/${ref.chapter}`);
             const lessonRefs = chDoc.lessons || [];
 
-            // 3. Fetch all Course Lessons for this chapter in parallel
-            const lessons = await Promise.all((lessonRefs || []).map(async (lRef) => {
-              try {
-                const lDoc = await frappeRestGet(`Course Lesson/${lRef.lesson}`);
+            // Return lesson skeletons instead of making parallel REST calls to prevent database locks.
+            // These skeletons are lazy-loaded when the student is on the active lesson page.
+            const lessons = (lessonRefs || []).map((lRef) => {
+              const cleanTitle = lRef.lesson
+                .replace(/^(lesson-|l-)/i, '')
+                .split(/[-_]/)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
                 
-                // Deserialize pts, quizQuestions, and codingExercise from instructor_notes
-                let pts = ["Key concept introduction."];
-                let quizQuestions = [];
-                let codingExercise = {
-                  hasExercise: false,
-                  language: 'python',
-                  instruction: '',
-                  starterCode: '',
-                  solutionCode: '',
-                  testCases: []
-                };
-                let pdf = "";
-                if (lDoc.instructor_notes) {
-                  try {
-                    const meta = JSON.parse(lDoc.instructor_notes);
-                    if (Array.isArray(meta.pts)) pts = meta.pts;
-                    if (Array.isArray(meta.quizQuestions)) quizQuestions = meta.quizQuestions;
-                    if (meta.codingExercise) codingExercise = meta.codingExercise;
-                    if (meta.pdf) pdf = meta.pdf;
-                  } catch (e) {}
-                }
-
-                return {
-                  id: lDoc.name,
-                  title: lDoc.title,
-                  dur: lDoc.duration || "10 min",
-                  vid: lDoc.youtube || "rfscVS0vtbw",
-                  overview: lDoc.body || "",
-                  pts,
-                  quizQuestions,
-                  codingExercise,
-                  pdf
-                };
-              } catch (err) {
-                console.error(`Failed to fetch lesson details for ${lRef.lesson}`, err);
-                return { id: lRef.lesson, title: "Untitled Lesson", dur: "10 min", vid: "", overview: "", pts: [], quizQuestions: [], codingExercise: { hasExercise: false, language: 'python', instruction: '', starterCode: '', solutionCode: '', testCases: [] } };
-              }
-            }));
+              return {
+                id: lRef.lesson,
+                title: cleanTitle,
+                dur: "10 min",
+                vid: "",
+                overview: "Lesson details are loading...",
+                pts: [],
+                quizQuestions: [],
+                codingExercise: { hasExercise: false },
+                pdf: "",
+                lazyLoad: true
+              };
+            });
 
             return {
               id: chDoc.name,

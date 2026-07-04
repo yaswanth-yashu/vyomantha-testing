@@ -82,6 +82,41 @@ export default function LessonRoute() {
                   });
                 });
                 found = lessonsInCourse.find(l => l.id === id);
+                if (found && found.lazyLoad) {
+                  let pts = ["Key concept introduction."];
+                  let quizQuestions = [];
+                  let codingExercise = {
+                    hasExercise: false,
+                    language: 'python',
+                    instruction: '',
+                    starterCode: '',
+                    solutionCode: '',
+                    testCases: []
+                  };
+                  let pdf = "";
+                  if (lDoc.instructor_notes) {
+                    try {
+                      const meta = JSON.parse(lDoc.instructor_notes);
+                      if (Array.isArray(meta.pts)) pts = meta.pts;
+                      if (Array.isArray(meta.quizQuestions)) quizQuestions = meta.quizQuestions;
+                      if (meta.codingExercise) codingExercise = meta.codingExercise;
+                      if (meta.pdf) pdf = meta.pdf;
+                    } catch (e) {}
+                  }
+                  
+                  found = {
+                    ...found,
+                    title: lDoc.title || found.title,
+                    dur: lDoc.duration || "10 min",
+                    vid: lDoc.youtube || "rfscVS0vtbw",
+                    overview: lDoc.body || "",
+                    pts,
+                    quizQuestions,
+                    codingExercise,
+                    pdf,
+                    lazyLoad: false
+                  };
+                }
               }
             }
           } catch (e) {

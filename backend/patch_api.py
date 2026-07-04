@@ -401,7 +401,7 @@ def retrieve_secure_chunks_internal(security_context: str, query_vector: str, si
         SELECT c.id, c.document_id, c.content, c.page_number, 1 - VEC_COSINE_DISTANCE(c.embedding, %s) AS similarity
         FROM `LMS Document Chunk` c
         JOIN `tabLMS Session Document` d ON c.document_id = d.name
-        WHERE c.tenant_id = %s AND d.file_key IN (
+        WHERE c.tenant_id = %s AND c.is_flagged = 0 AND d.file_key IN (
             SELECT file_key FROM `tabLMS Session Document` WHERE session_id = %s {session_owner_filter}
         )
         {role_filter}

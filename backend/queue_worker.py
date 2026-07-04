@@ -6,6 +6,7 @@ import uuid
 import requests
 import pymysql
 import boto3
+import hashlib
 from botocore.client import Config
 
 # Ensure stdout is unbuffered for clean Render logs
@@ -174,6 +175,28 @@ def get_batch_embeddings_with_retry(texts, attempt=0, retries=5, base_delay=1):
             
     raise Exception("Failed to fetch batch embeddings after max retries.")
 
+def detect_prompt_injection(text):
+    clean = text.lower()
+    patterns = [
+        "ignore previous instructions",
+        "ignore all instructions",
+        "ignore instructions",
+        "forget previous",
+        "forget all instructions",
+        "system prompt",
+        "system instruction",
+        "override system",
+        "developer mode",
+        "dan mode",
+        "jailbreak",
+        "you are now a",
+        "you are now an",
+        "forget the instructions",
+        "bypass instructions",
+        "bypass restrictions"
+    ]
+    return any(p in clean for p in patterns)
+
 def split_text(text, chunk_size=1000, overlap=200):
     paragraphs = text.split('\n\n')
     chunks = []
@@ -277,32 +300,78 @@ def process_job_outside(conn, job):
             # Split text of this page
             page_chunks = split_text(text, chunk_size=1000, overlap=200)
             for chunk_idx, content in enumerate(page_chunks):
+                content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+                is_flagged = 1 if detect_prompt_injection(content) else 0
                 all_chunks.append({
                     "content": content,
+                    "content_hash": content_hash,
                     "page_number": page_num,
-                    "chunk_index": len(all_chunks)
+                    "chunk_index": len(all_chunks),
+                    "is_flagged": is_flagged
                 })
                 
         if not all_chunks:
             raise Exception("No readable text found in PDF document.")
             
-        # 4. Embed chunks in batches of 50
-        batch_size = 50
-        chunks_with_embeddings = []
-        print(f"Generating embeddings in batches of {batch_size} for {len(all_chunks)} chunks...")
+        # 4. Deduplicate chunks using content_hash for this tenant in DB
+        unique_hashes = list(set(c["content_hash"] for c in all_chunks))
+        existing_embeddings = {}
+        if unique_hashes:
+            print(f"Checking database for existing embeddings for {len(unique_hashes)} unique hashes...")
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                hash_batch_size = 100
+                for i in range(0, len(unique_hashes), hash_batch_size):
+                    hash_batch = unique_hashes[i : i + hash_batch_size]
+                    format_strings = ','.join(['%s'] * len(hash_batch))
+                    query = f"SELECT content_hash, embedding FROM `LMS Document Chunk` WHERE tenant_id = %s AND content_hash IN ({format_strings})"
+                    cursor.execute(query, [tenant_id] + hash_batch)
+                    for row in cursor.fetchall():
+                        emb_val = row["embedding"]
+                        if isinstance(emb_val, str):
+                            try:
+                                emb_val = json.loads(emb_val)
+                            except Exception:
+                                pass
+                        existing_embeddings[row["content_hash"]] = emb_val
+
+        # Identify missing hashes that need embedding
+        missing_hashes = [h for h in unique_hashes if h not in existing_embeddings]
         
-        for idx in range(0, len(all_chunks), batch_size):
-            batch = all_chunks[idx : idx + batch_size]
-            batch_texts = [c["content"] for c in batch]
-            
-            # Fetch embeddings for this batch (rotate keys using index offsets)
-            vectors = get_batch_embeddings_with_retry(batch_texts, attempt=attempts + idx)
-            if len(vectors) != len(batch):
-                raise Exception(f"Batch embedding size mismatch: expected {len(batch)} vectors, got {len(vectors)}")
+        # Map missing hashes to one representative content text
+        hash_to_text = {}
+        for c in all_chunks:
+            if c["content_hash"] in missing_hashes:
+                hash_to_text[c["content_hash"]] = c["content"]
                 
-            for j, vector in enumerate(vectors):
-                batch[j]["embedding"] = vector
-                chunks_with_embeddings.append(batch[j])
+        # Generate embeddings for new unique chunks in batches of 50
+        new_embeddings = {}
+        if hash_to_text:
+            print(f"Generating embeddings for {len(hash_to_text)} new unique chunks...")
+            batch_size = 50
+            missing_items = list(hash_to_text.items())
+            for idx in range(0, len(missing_items), batch_size):
+                batch = missing_items[idx : idx + batch_size]
+                batch_texts = [item[1] for item in batch]
+                
+                # Fetch embeddings for this batch (rotate keys using index offsets)
+                vectors = get_batch_embeddings_with_retry(batch_texts, attempt=attempts + idx)
+                if len(vectors) != len(batch):
+                    raise Exception(f"Batch embedding size mismatch: expected {len(batch)} vectors, got {len(vectors)}")
+                    
+                for j, vector in enumerate(vectors):
+                    new_embeddings[batch[j][0]] = vector
+        
+        # Map embeddings back to all_chunks
+        chunks_with_embeddings = []
+        for c in all_chunks:
+            h = c["content_hash"]
+            if h in existing_embeddings:
+                c["embedding"] = existing_embeddings[h]
+            elif h in new_embeddings:
+                c["embedding"] = new_embeddings[h]
+            else:
+                raise Exception(f"Embedding mapping failed for hash: {h}")
+            chunks_with_embeddings.append(c)
                 
         # 5. Bulk Insert chunks and update job status in database (cap batches to 100)
         print(f"Bulk inserting {len(chunks_with_embeddings)} chunks to database...")
@@ -311,10 +380,22 @@ def process_job_outside(conn, job):
             # Delete any existing chunks for this document in case of retries
             cursor.execute("DELETE FROM `LMS Document Chunk` WHERE document_id = %s", (doc_id,))
             
+            # Log prompt injection flags to Audit Log
+            for c in chunks_with_embeddings:
+                if c["is_flagged"] == 1:
+                    print(f"Logging prompt injection security flag for chunk {c['chunk_index']} of document {doc_id}")
+                    cursor.execute(
+                        """
+                        INSERT INTO `LMS RAG Audit Log` (id, user_id, action, document_id, session_id, tenant_id, ip_address)
+                        VALUES (%s, %s, 'injection_flagged', %s, %s, %s, '127.0.0.1')
+                        """,
+                        (str(uuid.uuid4()), user_id, doc_id, session_id, tenant_id)
+                    )
+            
             insert_query = """
                 INSERT INTO `LMS Document Chunk` 
-                (id, document_id, session_id, user_id, course_id, tenant_id, chunk_index, page_number, content, embedding, embedding_model, embedding_version)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'gemini-embedding-001', 'v1')
+                (id, document_id, session_id, user_id, course_id, tenant_id, chunk_index, page_number, content, embedding, embedding_model, embedding_version, content_hash, is_flagged)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'gemini-embedding-001', 'v1', %s, %s)
             """
             
             db_batch_size = 100
@@ -331,7 +412,9 @@ def process_job_outside(conn, job):
                         c["chunk_index"],
                         c["page_number"],
                         c["content"],
-                        str(c["embedding"])
+                        str(c["embedding"]),
+                        c["content_hash"],
+                        c["is_flagged"]
                     )
                     for c in insert_batch
                 ]

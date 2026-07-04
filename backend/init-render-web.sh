@@ -151,12 +151,20 @@ sleep 2
 # Install queue worker dependencies in the bench virtualenv
 echo "Installing queue worker dependencies..."
 ./env/bin/pip install pypdf boto3 pymysql python-Levenshtein
+./env/bin/pip cache purge || true
 
 # Start the background queue worker process (supports scaling via env var)
 CONCURRENCY=${QUEUE_WORKER_CONCURRENCY:-2}
 echo "Starting $CONCURRENCY background queue workers..."
 for i in $(seq 1 $CONCURRENCY); do
     ./env/bin/python /home/frappe/queue_worker.py &
+done
+
+# Rotate logs exceeding 50MB to preserve crash trail
+find logs/ sites/*/logs/ -name "*.log" -size +50M 2>/dev/null | while read -r logfile; do
+    echo "Rotating large log file: $logfile"
+    mv "$logfile" "$logfile.1" 2>/dev/null || true
+    truncate -s 0 "$logfile" 2>/dev/null || true
 done
 
 # Update Procfile port mapping to Render's dynamic binding

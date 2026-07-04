@@ -16,11 +16,13 @@ WORKDIR /home/frappe/frappe-bench
 # Clone and install Payments & LMS apps at build time
 RUN git clone https://github.com/frappe/payments.git apps/payments --depth 1 \
     && rm -f apps/payments/package.json \
-    && ./env/bin/pip install -e ./apps/payments
+    && ./env/bin/pip install -e ./apps/payments \
+    && ./env/bin/pip cache purge
 
 RUN git clone https://github.com/frappe/lms.git apps/lms --depth 1 \
     && rm -rf apps/lms/frontend apps/lms/package.json \
-    && ./env/bin/pip install -e ./apps/lms
+    && ./env/bin/pip install -e ./apps/lms \
+    && ./env/bin/pip cache purge
 
 # Configure apps registry file
 RUN printf "frappe\npayments\nlms\n" > sites/apps.txt
@@ -37,9 +39,10 @@ RUN python3 /home/frappe/frappe-bench/patch_statement_time.py && rm /home/frappe
 COPY --chown=frappe:frappe patch_api.py /home/frappe/frappe-bench/patch_api.py
 RUN python3 /home/frappe/frappe-bench/patch_api.py && rm /home/frappe/frappe-bench/patch_api.py
 
-# Remove Redis/Watch from Procfile so they don't spawn redundantly
+# Remove Redis/Watch/Socketio from Procfile so they don't spawn redundantly
 RUN sed -i '/redis/d' ./Procfile \
-    && sed -i '/watch/d' ./Procfile
+    && sed -i '/watch/d' ./Procfile \
+    && sed -i '/socketio/d' ./Procfile
 
 # Build assets during the build phase (saves runtime CPU and RAM)
 RUN bench build

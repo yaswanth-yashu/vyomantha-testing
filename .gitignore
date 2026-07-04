@@ -1,8 +1,72 @@
-# Python bytecode
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.project
+.settings/
+.buildpath
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# Next.js local env files
+frontend/.env*.local
+frontend/.env
+
+# Local logs and debug files
+frontend/lib/api_consumption.json
+*.log
+logs/
+sites/*/logs/
+
+# Python / Virtual Envs
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+.hypothesis/
+.pytest_cache/
+*.egg-info/
+.eggs/
 
-# Local scratch files & credentials
+# Docker and local DB databases
+backend/mariadb-data/
+backend/redis-data/
+backend/frappe-bench-data/
+backend/.env
+
+# Local scratch files & developer scripts
 payload.json
 frontend/check_error_count.js
 frontend/check_error_log.js
@@ -17,3 +81,7 @@ frontend/scratch_test.js
 frontend/seed_google_oauth.js
 frontend/simulate_oauth.py
 docs/
+
+# AI Agent logs & context
+.gemini/
+brain/
