@@ -18,6 +18,7 @@ const NAV = [
   { id: '/resources',     Icon: FolderOpen,    label: 'Resources'     },
   { id: '/general-tutor', Icon: Brain,         label: 'Ask your AI TUTOR' },
   { id: '/coding-tutor',  Icon: Code2,         label: 'Code with AI TUTOR'  },
+  { id: '/code-puzzle',   Icon: Zap,           label: 'Code Puzzle'   },
   { id: '/jobs',          Icon: Briefcase,     label: 'Jobs'          },
   { id: '/progress',      Icon: BarChart3,     label: 'Progress'      },
 ];
