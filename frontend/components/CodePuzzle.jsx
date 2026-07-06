@@ -16,9 +16,8 @@ import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { T } from '@/lib/lms-data';
 
-// --- CodeMirror 6 Error Decoration Widget Extension ---
-import { Decoration, WidgetType, StateField, StateEffect } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { StateField, StateEffect } from "@codemirror/state";
+import { EditorView, Decoration, WidgetType } from "@codemirror/view";
 
 const setErrorEffect = StateEffect.define();
 
