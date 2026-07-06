@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   BookOpen, Brain, Code2, BarChart3, Home, Zap, LogOut, Briefcase, Award, FileText, FolderOpen, Sun, Moon,
-  ChevronLeft, ChevronRight, ChevronDown, Plus
+  ChevronLeft, ChevronRight, ChevronDown, Plus, FlaskConical, Dna, Atom
 } from 'lucide-react';
 import { T, getTheme, setTheme } from '@/lib/lms-data';
 import { useMediaQuery, isMobileMQ } from '@/lib/useMediaQuery';
@@ -607,37 +607,93 @@ export default function Sidebar({ isCollapsed = false, onToggleCollapse }) {
             )}
           </>
         ) : (
-          NAV.map(({ id, Icon, label }) => {
-            const active = isActive(id);
-            return (
-              <button key={id} onClick={() => router.push(id)} style={{
-                width: isCollapsed ? 42 : '100%',
-                height: isCollapsed ? 42 : 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: isCollapsed ? 'center' : 'flex-start',
-                gap: isCollapsed ? 0 : 11,
-                padding: isCollapsed ? '0' : '10px 13px',
-                borderRadius: 9,
-                marginBottom: 3,
-                background: active ? `${T.accent}18` : 'transparent',
-                border: active ? `1px solid ${T.accent}30` : '1px solid transparent',
-                color: active ? T.accent : T.muted,
-                cursor: 'pointer',
-                fontSize: 13.5,
-                fontWeight: active ? 600 : 400,
-                letterSpacing: '-0.01em',
-                transition: 'all 0.15s',
-                fontFamily: 'inherit',
-                flexShrink: 0,
-              }}
-              title={isCollapsed ? label : ""}
-              >
-                <Icon size={16} />
-                {!isCollapsed && label}
-              </button>
-            );
-          })
+          <>
+            {NAV.map(({ id, Icon, label }) => {
+              const active = isActive(id);
+              return (
+                <button key={id} onClick={() => router.push(id)} style={{
+                  width: isCollapsed ? 42 : '100%',
+                  height: isCollapsed ? 42 : 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  gap: isCollapsed ? 0 : 11,
+                  padding: isCollapsed ? '0' : '10px 13px',
+                  borderRadius: 9,
+                  marginBottom: 3,
+                  background: active ? `${T.accent}18` : 'transparent',
+                  border: active ? `1px solid ${T.accent}30` : '1px solid transparent',
+                  color: active ? T.accent : T.muted,
+                  cursor: 'pointer',
+                  fontSize: 13.5,
+                  fontWeight: active ? 600 : 400,
+                  letterSpacing: '-0.01em',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
+                  flexShrink: 0,
+                }}
+                title={isCollapsed ? label : ""}
+                >
+                  <Icon size={16} />
+                  {!isCollapsed && label}
+                </button>
+              );
+            })}
+
+            {/* Separator / Title for Labs */}
+            <div style={{
+              margin: '12px 0 6px 0',
+              padding: isCollapsed ? '0' : '0 12px',
+              display: 'flex',
+              justifyContent: isCollapsed ? 'center' : 'flex-start',
+              borderTop: `1px solid ${T.border}`,
+              paddingTop: 12,
+              flexShrink: 0
+            }}>
+              {!isCollapsed ? (
+                <span style={{ fontSize: 9, color: T.dim, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>VIRTUAL LABS</span>
+              ) : (
+                <div style={{ width: 12, height: 1, background: T.border }} />
+              )}
+            </div>
+
+            {/* Labs Links */}
+            {[
+              { id: '/labs/physics',   Icon: Atom,         label: 'Physics Lab' },
+              { id: '/labs/chemistry', Icon: FlaskConical, label: 'Chemistry Lab' },
+              { id: '/labs/biology',   Icon: Dna,          label: 'Biology Lab' },
+            ].map(({ id, Icon, label }) => {
+              const active = isActive(id);
+              return (
+                <button key={id} onClick={() => router.push(id)} style={{
+                  width: isCollapsed ? 42 : '100%',
+                  height: isCollapsed ? 42 : 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  gap: isCollapsed ? 0 : 11,
+                  padding: isCollapsed ? '0' : '10px 13px',
+                  borderRadius: 9,
+                  marginBottom: 3,
+                  background: active ? `${T.accent}18` : 'transparent',
+                  border: active ? `1px solid ${T.accent}30` : '1px solid transparent',
+                  color: active ? T.accent : T.muted,
+                  cursor: 'pointer',
+                  fontSize: 13.5,
+                  fontWeight: active ? 600 : 400,
+                  letterSpacing: '-0.01em',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
+                  flexShrink: 0,
+                }}
+                title={isCollapsed ? label : ""}
+                >
+                  <Icon size={16} />
+                  {!isCollapsed && label}
+                </button>
+              );
+            })}
+          </>
         )}
       </div>
 
