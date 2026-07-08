@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
-// 3D Code Visualizer Component
+// 3D Code Visualizer Component (Stable Persistent Context)
 export default function CodeVisualizer3D({
   listKey,
   listVal = [],
@@ -15,13 +16,22 @@ export default function CodeVisualizer3D({
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Keep track of mesh targets and animation properties in refs to bypass React render cycles
-  const meshesRef = useRef({}); // keyed by element ID
-  const elementIdsRef = useRef([]); // array of stable IDs corresponding to current indices
-  const prevListValRef = useRef([]);
+  // References to keep WebGL context and controls persistent
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
+  const controlsRef = useRef(null);
+  const visualizerGroupRef = useRef(null);
+  const connectorGroupRef = useRef(null);
 
-  // Coordinate projection state for HTML labels overlay
-  const [labelCoords, setLabelCoords] = useState([]);
+  // Animation targets and element identities
+  const meshesRef = useRef({}); // keyed by element ID
+  const elementIdsRef = useRef([]); // stable element IDs array
+  const hoveredMeshIdRef = useRef(null);
+  const pointersRef = useRef({}); // current pointer registers map
+  
+  // Selected element for student inspector details card
+  const [selectedElement, setSelectedElement] = useState(null);
   
   // Scalar variables for stack visualization
   const [stackVars, setStackVars] = useState([]);
@@ -30,11 +40,10 @@ export default function CodeVisualizer3D({
   useEffect(() => {
     if (!listVal || listVal.length === 0) {
       elementIdsRef.current = [];
-      prevListValRef.current = [];
       return;
     }
 
-    const prevListVal = prevListValRef.current;
+    const prevListVal = elementIdsRef.current.map(id => meshesRef.current[id]?.value);
     let newIds = [...elementIdsRef.current];
 
     if (newIds.length !== listVal.length) {
@@ -94,10 +103,9 @@ export default function CodeVisualizer3D({
     }
 
     elementIdsRef.current = newIds;
-    prevListValRef.current = [...listVal];
   }, [listVal]);
 
-  // Handle scalar and dict variable changes for 3D Stack display
+  // Handle stack memory values
   useEffect(() => {
     const list = [];
     scalarKeys.forEach(key => {
@@ -115,23 +123,24 @@ export default function CodeVisualizer3D({
     setStackVars(list);
   }, [scalarKeys, dictKeys, variables, prevVariables]);
 
-  // Main Three.js Runner
+  // 1. Mount-only useEffect to initialize Three.js Context
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
 
     const container = containerRef.current;
     const canvas = canvasRef.current;
-    let width = container.clientWidth || 600;
-    let height = container.clientHeight || 280;
+    const width = container.clientWidth || 600;
+    const height = container.clientHeight || 280;
 
-    // 1. Setup Scene, Camera, Renderer
+    // Setup Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#ffffff'); // White background as requested
+    scene.background = new THREE.Color('#ffffff'); // White background
+    sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    // Position camera to look down at an angle (isometric feel)
-    camera.position.set(0, 5, 9);
+    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
+    camera.position.set(0, 4.5, 8.5);
     camera.lookAt(0, 0, 0);
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -142,183 +151,137 @@ export default function CodeVisualizer3D({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    rendererRef.current = renderer;
 
-    // 2. Add Lights
+    // OrbitControls for Student Interaction
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    // Set boundaries to prevent getting lost in space
+    controls.minDistance = 3;
+    controls.maxDistance = 18;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05; // don't go below ground level
+    controlsRef.current = controls;
+
+    // Add Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(4, 8, 4);
+    dirLight.position.set(4, 9, 3);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 1024;
     dirLight.shadow.mapSize.height = 1024;
-    dirLight.shadow.bias = -0.001;
+    dirLight.shadow.bias = -0.0005;
     scene.add(dirLight);
 
-    // Subtle blue point light for premium accent
-    const pointLight = new THREE.PointLight(0x6366f1, 0.4, 15);
-    pointLight.position.set(0, 3, 2);
+    const pointLight = new THREE.PointLight(0x6366f1, 0.35, 12);
+    pointLight.position.set(0, 4, 1);
     scene.add(pointLight);
 
-    // 3. Grid Helper (Subtle gray lines on white background)
+    // Subtle Grid Helper
     const gridHelper = new THREE.GridHelper(30, 30, 0xe2e8f0, 0xf1f5f9);
-    gridHelper.position.y = -0.51;
+    gridHelper.position.y = -0.505;
     scene.add(gridHelper);
 
-    // Group to hold all visualizer meshes (so we can rotate it for parallax)
+    // Visualizer meshes container group
     const visualizerGroup = new THREE.Group();
     scene.add(visualizerGroup);
+    visualizerGroupRef.current = visualizerGroup;
 
-    // 4. Mouse Move Parallax Logic
-    let mouseX = 0;
-    let mouseY = 0;
-    const handleMouseMove = (e) => {
+    // Compare/swap 3D connectors group
+    const connectorGroup = new THREE.Group();
+    scene.add(connectorGroup);
+    connectorGroupRef.current = connectorGroup;
+
+    // Raycasting elements
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const handleCanvasMouseMove = (event) => {
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      mouseX = (x / rect.width) * 2 - 1;
-      mouseY = -(y / rect.height) * 2 + 1;
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
-    container.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mousemove', handleCanvasMouseMove);
 
-    // 5. Materials
-    const baseMaterial = new THREE.MeshStandardMaterial({
-      color: 0x4f46e5, // Indigo
-      roughness: 0.25,
-      metalness: 0.1,
-      flatShading: false
+    const handleCanvasClick = () => {
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(visualizerGroup.children);
+      if (intersects.length > 0) {
+        const clickedMesh = intersects[0].object;
+        const { id, index, value } = clickedMesh.userData;
+        
+        // Query current pointers
+        const activePointers = pointersRef.current[index] || [];
+        setSelectedElement({
+          id,
+          index,
+          value,
+          isPointed: activePointers.length > 0,
+          pointers: activePointers
+        });
+      } else {
+        setSelectedElement(null);
+      }
+    };
+    canvas.addEventListener('click', handleCanvasClick);
+
+    // Resize Observer for responsive scaling
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const w = container.clientWidth || 600;
+      const h = container.clientHeight || 280;
+
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
     });
+    resizeObserver.observe(container);
 
-    const compareMaterial = new THREE.MeshStandardMaterial({
-      color: 0x10b981, // Emerald green
-      roughness: 0.15,
-      metalness: 0.1,
-      emissive: 0x10b981,
-      emissiveIntensity: 0.15
-    });
-
-    const swapMaterial = new THREE.MeshStandardMaterial({
-      color: 0xef4444, // Coral Red
-      roughness: 0.15,
-      metalness: 0.1,
-      emissive: 0xef4444,
-      emissiveIntensity: 0.15
-    });
-
-    const changedMaterial = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b, // Amber
-      roughness: 0.2,
-      metalness: 0.1,
-      emissive: 0xf59e0b,
-      emissiveIntensity: 0.1
-    });
-
-    // Clean up outdated meshes from scene
-    const activeMeshIds = new Set();
-    
-    // Animation tick
+    // Continuous tick loop
     let animationFrameId = null;
+    const tempV = new THREE.Vector3();
 
     const tick = () => {
-      // Mouse Parallax lerping
-      visualizerGroup.rotation.y += (mouseX * 0.15 - visualizerGroup.rotation.y) * 0.05;
-      visualizerGroup.rotation.x += (-mouseY * 0.1 - visualizerGroup.rotation.x) * 0.05;
+      controls.update();
 
-      const ids = elementIdsRef.current;
-      const currentList = prevListValRef.current;
+      // Raycast Hover check
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(visualizerGroup.children);
+      if (intersects.length > 0) {
+        hoveredMeshIdRef.current = intersects[0].object.userData.id;
+        canvas.style.cursor = 'pointer';
+      } else {
+        hoveredMeshIdRef.current = null;
+        canvas.style.cursor = 'grab';
+      }
 
-      // Determine heights sizing parameters (normalize heights of bars)
-      const numericVals = currentList.map(v => typeof v === 'number' ? v : 1).filter(v => !isNaN(v));
-      const maxVal = numericVals.length > 0 ? Math.max(...numericVals, 1) : 1;
-      const minVal = numericVals.length > 0 ? Math.min(...numericVals, 0) : 0;
-      
-      const spacing = 1.0;
-      const startX = -((currentList.length - 1) * spacing) / 2;
+      // Smoothly interpolate (lerp) meshes
+      Object.keys(meshesRef.current).forEach((id) => {
+        const meshInfo = meshesRef.current[id];
+        if (!meshInfo) return;
 
-      // Extract pointers active indices
-      const pointers = {};
-      Object.entries(variables).forEach(([k, v]) => {
-        if (typeof v === 'number' && v >= 0 && v < currentList.length && !k.startsWith('__') && k !== 'step_counter') {
-          if (!pointers[v]) pointers[v] = [];
-          pointers[v].push(k);
-        }
-      });
-
-      // Synchronize and update 3D meshes
-      activeMeshIds.clear();
-
-      ids.forEach((id, index) => {
-        const val = currentList[index];
-        activeMeshIds.add(id);
-
-        // Calculate heights
-        let targetHeight = 1.5; // Default height for non-numbers
-        if (typeof val === 'number') {
-          const range = maxVal - minVal || 1;
-          const pct = (val - minVal) / range;
-          targetHeight = 0.4 + pct * 2.2; // Height between 0.4 and 2.6 units
-        }
-
-        // Calculate positions
-        const targetX = startX + index * spacing;
-        const targetY = targetHeight / 2 - 0.5; // Base is at y = -0.5
-        const targetZ = 0;
-
-        // Determine correct material color
-        const activePointers = pointers[index] || [];
-        const isPointed = activePointers.length > 0;
-        const prevVal = prevVariables[listKey]?.[index];
-        const wasChanged = prevVal !== undefined && prevVal !== val;
-
-        let targetMat = baseMaterial;
-        if (isPointed) {
-          targetMat = actionType === 'SWAP' ? swapMaterial : compareMaterial;
-        } else if (wasChanged) {
-          targetMat = changedMaterial;
-        }
-
-        // Check if mesh already exists, otherwise create it
-        let meshInfo = meshesRef.current[id];
-        if (!meshInfo) {
-          // Create rounded-like box geometry
-          const geo = new THREE.BoxGeometry(0.65, 1, 0.65); // Height starts at 1, scale.y adjusts height
-          const mesh = new THREE.Mesh(geo, baseMaterial.clone());
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          
-          mesh.position.set(targetX, -10, targetZ); // Spawn from below
-          visualizerGroup.add(mesh);
-
-          meshInfo = {
-            mesh,
-            currentHeight: 0.1,
-            targetHeight,
-            targetX,
-            targetY,
-            targetZ,
-            targetMat
-          };
-          meshesRef.current[id] = meshInfo;
-        }
-
-        // Update target properties
-        meshInfo.targetX = targetX;
-        meshInfo.targetHeight = targetHeight;
-        meshInfo.targetY = targetY;
-        meshInfo.targetMat = targetMat;
-
-        // Smoothly interpolate (lerp) values
         const mesh = meshInfo.mesh;
-        mesh.position.x += (meshInfo.targetX - mesh.position.x) * 0.12;
         
-        // Lerp scale height and offset position Y accordingly
+        // Raycaster scale pop effect on hover
+        const isHovered = hoveredMeshIdRef.current === id;
+        const hoverScaleFactor = isHovered ? 1.15 : 1.0;
+
+        // Position interpolation
+        mesh.position.x += (meshInfo.targetX - mesh.position.x) * 0.12;
+        mesh.position.z += (meshInfo.targetZ - mesh.position.z) * 0.12;
+
+        // Height scale interpolation
         meshInfo.currentHeight += (meshInfo.targetHeight - meshInfo.currentHeight) * 0.12;
         mesh.scale.y = meshInfo.currentHeight;
-        mesh.position.y = meshInfo.currentHeight / 2 - 0.5; // keeps bottom anchored on the grid plane
+        mesh.scale.x = 1.0 * hoverScaleFactor;
+        mesh.scale.z = 1.0 * hoverScaleFactor;
 
-        mesh.position.z += (targetZ - mesh.position.z) * 0.12;
+        // Keep anchored to grid floor
+        mesh.position.y = (meshInfo.currentHeight / 2) - 0.5;
 
-        // Lerp material color
+        // Material color & glow interpolation
         mesh.material.color.lerp(meshInfo.targetMat.color, 0.12);
         if (meshInfo.targetMat.emissive) {
           mesh.material.emissive.lerp(meshInfo.targetMat.emissive, 0.12);
@@ -326,51 +289,25 @@ export default function CodeVisualizer3D({
         } else {
           mesh.material.emissive.setHex(0x000000);
         }
-      });
 
-      // Remove meshes that are no longer present
-      Object.keys(meshesRef.current).forEach((id) => {
-        if (!activeMeshIds.has(id)) {
-          const meshInfo = meshesRef.current[id];
-          visualizerGroup.remove(meshInfo.mesh);
-          meshInfo.mesh.geometry.dispose();
-          meshInfo.mesh.material.dispose();
-          delete meshesRef.current[id];
-        }
-      });
-
-      // 6. Project 3D Coordinates to 2D for HTML Label Overlay
-      const coords = [];
-      const tempV = new THREE.Vector3();
-
-      ids.forEach((id, index) => {
-        const meshInfo = meshesRef.current[id];
-        if (meshInfo) {
-          const val = currentList[index];
-          const mesh = meshInfo.mesh;
-
-          // Get top center of the 3D bar in world space
-          tempV.set(mesh.position.x, mesh.position.y + meshInfo.currentHeight / 2 + 0.1, mesh.position.z);
+        // Project coordinate styles directly onto HTML overlays for absolute positioning
+        const overlayElement = document.getElementById(`label-${id}`);
+        if (overlayElement) {
+          // Top position of bar
+          tempV.set(mesh.position.x, mesh.position.y + (meshInfo.currentHeight / 2) + 0.1, mesh.position.z);
           tempV.project(camera);
 
-          // Convert to client width/height coordinates
-          const x2d = (tempV.x * 0.5 + 0.5) * width;
-          const y2d = (-tempV.y * 0.5 + 0.5) * height;
+          const w = container.clientWidth || 600;
+          const h = container.clientHeight || 280;
 
-          // Get active pointers
-          const activePointers = pointers[index] || [];
+          const x2d = (tempV.x * 0.5 + 0.5) * w;
+          const y2d = (-tempV.y * 0.5 + 0.5) * h;
 
-          coords.push({
-            id,
-            x: x2d,
-            y: y2d,
-            val,
-            pointers: activePointers
-          });
+          overlayElement.style.left = `${x2d}px`;
+          overlayElement.style.top = `${y2d}px`;
+          overlayElement.style.display = 'flex';
         }
       });
-
-      setLabelCoords(coords);
 
       renderer.render(scene, camera);
       animationFrameId = requestAnimationFrame(tick);
@@ -378,45 +315,184 @@ export default function CodeVisualizer3D({
 
     tick();
 
-    // 7. Handle Resize Observer
-    const resizeObserver = new ResizeObserver((entries) => {
-      if (!entries || entries.length === 0) return;
-      width = container.clientWidth || 600;
-      height = container.clientHeight || 280;
-
-      renderer.setSize(width, height);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    });
-    resizeObserver.observe(container);
-
-    // Cleanups
+    // Cleanups on unmount
     return () => {
-      container.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mousemove', handleCanvasMouseMove);
+      canvas.removeEventListener('click', handleCanvasClick);
       resizeObserver.disconnect();
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
-      // Clean up meshes
-      Object.values(meshesRef.current).forEach((m) => {
-        visualizerGroup.remove(m.mesh);
-        m.mesh.geometry.dispose();
-        m.mesh.material.dispose();
-      });
-      meshesRef.current = {};
+      controls.dispose();
+      renderer.dispose();
+    };
+  }, []);
 
+  // 2. Separate reconciler useEffect to update target properties on step changes
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const visualizerGroup = visualizerGroupRef.current;
+    const connectorGroup = connectorGroupRef.current;
+    if (!scene || !visualizerGroup || !connectorGroup) return;
+
+    // Materials definitions
+    const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x4f46e5, roughness: 0.25, metalness: 0.1 });
+    const compareMaterial = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.15, metalness: 0.1, emissive: 0x10b981, emissiveIntensity: 0.15 });
+    const swapMaterial = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.15, metalness: 0.1, emissive: 0xef4444, emissiveIntensity: 0.15 });
+    const changedMaterial = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.2, metalness: 0.1, emissive: 0xf59e0b, emissiveIntensity: 0.1 });
+
+    const ids = elementIdsRef.current;
+    
+    // Normalize bar heights
+    const numericVals = listVal.map(v => typeof v === 'number' ? v : 1).filter(v => !isNaN(v));
+    const maxVal = numericVals.length > 0 ? Math.max(...numericVals, 1) : 1;
+    const minVal = numericVals.length > 0 ? Math.min(...numericVals, 0) : 0;
+    
+    const spacing = 1.0;
+    const startX = -((listVal.length - 1) * spacing) / 2;
+
+    // Detect pointers and map pointersRef
+    const pointers = {};
+    Object.entries(variables).forEach(([k, v]) => {
+      if (typeof v === 'number' && v >= 0 && v < listVal.length && !k.startsWith('__') && k !== 'step_counter') {
+        if (!pointers[v]) pointers[v] = [];
+        pointers[v].push(k);
+      }
+    });
+    pointersRef.current = pointers;
+
+    const activeMeshIds = new Set(ids);
+
+    // Sync meshes
+    ids.forEach((id, index) => {
+      const val = listVal[index];
+      let targetHeight = 1.5;
+      if (typeof val === 'number') {
+        const range = maxVal - minVal || 1;
+        const pct = (val - minVal) / range;
+        targetHeight = 0.4 + pct * 2.2; // height between 0.4 and 2.6
+      }
+
+      const targetX = startX + index * spacing;
+      const targetY = targetHeight / 2 - 0.5;
+      const targetZ = 0;
+
+      // Determine material
+      const activePointers = pointers[index] || [];
+      const isPointed = activePointers.length > 0;
+      const prevVal = prevVariables[listKey]?.[index];
+      const wasChanged = prevVal !== undefined && prevVal !== val;
+
+      let targetMat = baseMaterial;
+      if (isPointed) {
+        targetMat = actionType === 'SWAP' ? swapMaterial : compareMaterial;
+      } else if (wasChanged) {
+        targetMat = changedMaterial;
+      }
+
+      let meshInfo = meshesRef.current[id];
+      if (!meshInfo) {
+        // Create box mesh
+        const geo = new THREE.BoxGeometry(0.65, 1, 0.65);
+        const mesh = new THREE.Mesh(geo, baseMaterial.clone());
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.position.set(targetX, -10, targetZ); // slide up from bottom
+        mesh.userData = { id, index, value: val };
+        visualizerGroup.add(mesh);
+
+        meshInfo = {
+          mesh,
+          currentHeight: 0.1,
+          targetHeight,
+          targetX,
+          targetY,
+          targetZ,
+          targetMat,
+          value: val
+        };
+        meshesRef.current[id] = meshInfo;
+      } else {
+        // Update values
+        meshInfo.targetX = targetX;
+        meshInfo.targetHeight = targetHeight;
+        meshInfo.targetY = targetY;
+        meshInfo.targetMat = targetMat;
+        meshInfo.value = val;
+        // Keep mesh userData updated
+        meshInfo.mesh.userData.index = index;
+        meshInfo.mesh.userData.value = val;
+      }
+    });
+
+    // Remove outdated meshes
+    Object.keys(meshesRef.current).forEach((id) => {
+      if (!activeMeshIds.has(id)) {
+        const meshInfo = meshesRef.current[id];
+        visualizerGroup.remove(meshInfo.mesh);
+        meshInfo.mesh.geometry.dispose();
+        meshInfo.mesh.material.dispose();
+        delete meshesRef.current[id];
+      }
+    });
+
+    // 3. Render 3D Connector Arch/Tube for COMPARE or SWAP operations
+    // Clear old connectors
+    while(connectorGroup.children.length > 0) {
+      const child = connectorGroup.children[0];
+      connectorGroup.remove(child);
+      child.geometry.dispose();
+      child.material.dispose();
+    }
+
+    const activeIndices = Object.keys(pointers).map(Number).sort((a, b) => a - b);
+    if (activeIndices.length >= 2 && (actionType === 'COMPARE' || actionType === 'SWAP')) {
+      const idx1 = activeIndices[0];
+      const idx2 = activeIndices[activeIndices.length - 1];
+
+      // Get mesh info
+      const id1 = ids[idx1];
+      const id2 = ids[idx2];
+      const m1 = meshesRef.current[id1];
+      const m2 = meshesRef.current[id2];
+
+      if (m1 && m2) {
+        const x1 = startX + idx1 * spacing;
+        const x2 = startX + idx2 * spacing;
+        const y1 = m1.targetHeight - 0.5;
+        const y2 = m2.targetHeight - 0.5;
+
+        const start = new THREE.Vector3(x1, y1 + 0.1, 0);
+        const end = new THREE.Vector3(x2, y2 + 0.1, 0);
+        
+        // Draw elegant curve arching upwards
+        const midX = (x1 + x2) / 2;
+        const midY = Math.max(y1, y2) + 1.2 + Math.abs(x1 - x2) * 0.15;
+        const control = new THREE.Vector3(midX, midY, 0);
+
+        const path = new THREE.QuadraticBezierCurve3(start, control, end);
+        const tubeGeo = new THREE.TubeGeometry(path, 25, 0.035, 8, false);
+        
+        const connectorColor = actionType === 'SWAP' ? 0xef4444 : 0x10b981;
+        const tubeMat = new THREE.MeshStandardMaterial({
+          color: connectorColor,
+          emissive: connectorColor,
+          emissiveIntensity: 0.35,
+          roughness: 0.2
+        });
+
+        const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+        connectorGroup.add(tubeMesh);
+      }
+    }
+
+    // Cleanup materials
+    return () => {
       baseMaterial.dispose();
       compareMaterial.dispose();
       swapMaterial.dispose();
       changedMaterial.dispose();
-
-      ambientLight.dispose();
-      dirLight.dispose();
-      pointLight.dispose();
-      gridHelper.dispose();
-      
-      renderer.dispose();
     };
-  }, [listKey, variables, prevVariables, actionType]);
+  }, [listKey, listVal, variables, actionType]);
 
   return (
     <div
@@ -432,74 +508,119 @@ export default function CodeVisualizer3D({
         flexDirection: 'column'
       }}
     >
-      {/* 3D WebGL Canvas */}
-      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%', cursor: 'grab' }} />
+      {/* Three.js WebGL Canvas */}
+      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
 
-      {/* Floating 2D HTML Labels on top of WebGL Canvas */}
+      {/* Floating 2D HTML Labels Overlay (Positions managed directly by WebGL loop) */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}>
-        {labelCoords.map((coord) => (
-          <div
-            key={coord.id}
-            style={{
-              position: 'absolute',
-              left: coord.x,
-              top: coord.y,
-              transform: 'translate(-50%, -100%)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 4
-            }}
-          >
-            {/* Value Label Card */}
+        {elementIdsRef.current.map((id, index) => {
+          const val = listVal[index];
+          const activePointers = pointersRef.current[index] || [];
+          return (
             <div
+              key={id}
+              id={`label-${id}`}
               style={{
-                background: '#0F172A', // Slate dark card
-                color: '#F8FAFC',
-                fontFamily: 'monospace',
-                fontSize: 11.5,
-                fontWeight: 800,
-                padding: '2px 7px',
-                borderRadius: 5,
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
-                border: '1px solid rgba(255,255,255,0.1)'
+                position: 'absolute',
+                display: 'none', // toggled to block by three.js tick loop once coordinates are projected
+                transform: 'translate(-50%, -100%)',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4
               }}
             >
-              {String(coord.val)}
-            </div>
-
-            {/* Pointers badges indicating indices variables (e.g. i, j) */}
-            {coord.pointers.length > 0 && (
+              {/* Value Box */}
               <div
                 style={{
-                  display: 'flex',
-                  gap: 3,
-                  marginTop: 2
+                  background: '#0F172A',
+                  color: '#F8FAFC',
+                  fontFamily: 'monospace',
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  padding: '2px 7px',
+                  borderRadius: 5,
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
+                  border: '1px solid rgba(255,255,255,0.1)'
                 }}
               >
-                {coord.pointers.map(ptrName => (
-                  <div
-                    key={ptrName}
-                    style={{
-                      background: actionType === 'SWAP' ? '#EF4444' : '#10B981',
-                      color: '#ffffff',
-                      fontSize: 8.5,
-                      fontWeight: 800,
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      fontFamily: 'monospace',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-                      animation: 'bounce 0.8s infinite alternate'
-                    }}
-                  >
-                    {ptrName}
-                  </div>
-                ))}
+                {String(val)}
               </div>
-            )}
-          </div>
-        ))}
+
+              {/* Variable Pointers (i, j, low, high) */}
+              {activePointers.length > 0 && (
+                <div style={{ display: 'flex', gap: 3, marginTop: 2 }}>
+                  {activePointers.map(ptrName => (
+                    <div
+                      key={ptrName}
+                      style={{
+                        background: actionType === 'SWAP' ? '#EF4444' : '#10B981',
+                        color: '#ffffff',
+                        fontSize: 8.5,
+                        fontWeight: 800,
+                        padding: '1px 5px',
+                        borderRadius: 3,
+                        fontFamily: 'monospace',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                        animation: 'bounce 0.8s infinite alternate'
+                      }}
+                    >
+                      {ptrName}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {/* Selected Element HUD Card Details Inspector */}
+      {selectedElement && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            left: 12,
+            background: 'rgba(15, 23, 42, 0.95)',
+            backdropFilter: 'blur(8px)',
+            color: '#F8FAFC',
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid rgba(255,255,255,0.08)',
+            fontSize: 11.5,
+            fontFamily: 'monospace',
+            zIndex: 40,
+            minWidth: 190,
+            boxShadow: '0 10px 20px rgba(0,0,0,0.3)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 4, marginBottom: 4 }}>
+            <span style={{ fontWeight: 800, color: '#F5A95B', letterSpacing: '0.02em' }}>3D ELEMENT INSPECTOR</span>
+            <button
+              onClick={() => setSelectedElement(null)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#647298',
+                cursor: 'pointer',
+                fontWeight: 800,
+                fontSize: 11,
+                padding: '0 2px'
+              }}
+              onMouseEnter={e => e.target.style.color = '#ef4444'}
+              onMouseLeave={e => e.target.style.color = '#647298'}
+            >
+              ✕
+            </button>
+          </div>
+          <div>Target: <span style={{ color: '#F5A95B', fontWeight: 800 }}>{listKey}[{selectedElement.index}]</span></div>
+          <div>Value: <span style={{ color: '#22C5A0', fontWeight: 800 }}>{String(selectedElement.value)}</span></div>
+          <div>Status: <span style={{ color: '#8892B0' }}>{selectedElement.isPointed ? `Pointed (${selectedElement.pointers.join(', ')})` : 'Idle'}</span></div>
+        </div>
+      )}
 
       {/* Stack/Scalar Registers Sidebar overlay (right side) */}
       {stackVars.length > 0 && (
@@ -561,7 +682,7 @@ export default function CodeVisualizer3D({
         </div>
       )}
 
-      {/* Styles for mini bounce animation */}
+      {/* Styles for bounce animation and OrbitControls hover cursor */}
       <style>{`
         @keyframes bounce {
           from { transform: translateY(0); }
