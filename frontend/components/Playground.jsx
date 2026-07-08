@@ -1488,7 +1488,7 @@ except Exception as e:
             </div>
 
             {/* Content scroll area */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: rightSplitPercent === 100 ? 'none' : 'block' }} className="sandbox-scroll">
+            <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: rightSplitPercent === 100 ? 'none' : 'block' }} className="sandbox-scroll tab-pane">
               {/* Tab 1: Explanation tab */}
               {(!codingExercise?.hasExercise || activeTab === 'explanation') && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
