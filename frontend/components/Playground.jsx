@@ -945,6 +945,7 @@ except Exception as e:
             dictKeys={dictKeys}
             actionType={actionType}
             swapMessage={swapMessage}
+            stdout={stdout}
           />
         </div>
 

@@ -2,6 +2,36 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
+// Utility to create a canvas texture for 3D text
+function createTextTexture(text, textColor = '#F8FAFC', bgColor = '#0F172A', fontSize = 32, width = 256, height = 64) {
+  if (typeof window === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  
+  // Background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, width, height);
+  
+  // Border outline
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, 0, width, height);
+  
+  // Text content
+  ctx.fillStyle = textColor;
+  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, width / 2, height / 2);
+  
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  return texture;
+}
+
 // 3D Code Visualizer Component (Stable Persistent Context)
 export default function CodeVisualizer3D({
   listKey,
@@ -11,7 +41,8 @@ export default function CodeVisualizer3D({
   scalarKeys = [],
   dictKeys = [],
   actionType = 'STEP',
-  swapMessage = ''
+  swapMessage = '',
+  stdout = ''
 }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
@@ -346,185 +377,435 @@ export default function CodeVisualizer3D({
     const swapMaterial = new THREE.MeshPhysicalMaterial({ color: 0xef4444, roughness: 0.1, metalness: 0.4, clearcoat: 1.0, clearcoatRoughness: 0.1, emissive: 0xef4444, emissiveIntensity: 0.25 });
     const changedMaterial = new THREE.MeshPhysicalMaterial({ color: 0xf59e0b, roughness: 0.15, metalness: 0.4, clearcoat: 1.0, clearcoatRoughness: 0.1, emissive: 0xf59e0b, emissiveIntensity: 0.2 });
 
-    const ids = elementIdsRef.current;
-    const spacing = 1.0;
-    const startX = -((listVal.length - 1) * spacing) / 2;
+    const isListMode = listKey && listVal && listVal.length > 0;
 
-    // Detect pointers and map pointersRef
-    const pointers = {};
-    Object.entries(variables).forEach(([k, v]) => {
-      if (typeof v === 'number' && v >= 0 && v < listVal.length && !k.startsWith('__') && k !== 'step_counter') {
-        if (!pointers[v]) pointers[v] = [];
-        pointers[v].push(k);
-      }
-    });
-    pointersRef.current = pointers;
+    if (isListMode) {
+      // Clean up variables & stdout mode meshes (keys starting with "var-", "pedestal-", "stdout-", "console-platform")
+      Object.keys(meshesRef.current).forEach((id) => {
+        if (id.startsWith('var-') || id.startsWith('pedestal-') || id.startsWith('stdout-') || id === 'console-platform') {
+          const meshInfo = meshesRef.current[id];
+          visualizerGroup.remove(meshInfo.mesh);
+          meshInfo.mesh.geometry.dispose();
+          if (meshInfo.texture) meshInfo.texture.dispose();
+          if (Array.isArray(meshInfo.mesh.material)) {
+            meshInfo.mesh.material.forEach(m => m.dispose());
+          } else {
+            meshInfo.mesh.material.dispose();
+          }
+          delete meshesRef.current[id];
+        }
+      });
 
-    // Auto-frame camera based on array length and aspect ratio
-    if (cameraRef.current && containerRef.current) {
-      const w = containerRef.current.clientWidth || 600;
-      const h = containerRef.current.clientHeight || 280;
-      const A = w / h;
-      const arrayWidth = (listVal.length - 1) * spacing + 1.0;
-      const fovRad = (cameraRef.current.fov * Math.PI) / 180;
-      const halfFovHeight = Math.tan(fovRad / 2);
-      
-      const requiredDistByWidth = (arrayWidth / 2) / (A * halfFovHeight);
-      const requiredDistByHeight = 2.0 / halfFovHeight;
-      const targetDist = Math.max(6.5, requiredDistByWidth + 2.0, requiredDistByHeight);
-      
-      // Fixed cinematic angle: looking slightly down at the array
-      cameraRef.current.position.set(0, targetDist * 0.52, targetDist * 0.85);
-      cameraRef.current.lookAt(0, 0.1, 0);
-      if (controlsRef.current) {
-        controlsRef.current.target.set(0, 0.1, 0);
-      }
-    }
+      const ids = elementIdsRef.current;
+      const spacing = 1.0;
+      const startX = -((listVal.length - 1) * spacing) / 2;
 
-    const activeMeshIds = new Set(ids);
+      // Detect pointers and map pointersRef
+      const pointers = {};
+      Object.entries(variables).forEach(([k, v]) => {
+        if (typeof v === 'number' && v >= 0 && v < listVal.length && !k.startsWith('__') && k !== 'step_counter') {
+          if (!pointers[v]) pointers[v] = [];
+          pointers[v].push(k);
+        }
+      });
+      pointersRef.current = pointers;
 
-    // Sync meshes
-    ids.forEach((id, index) => {
-      const val = listVal[index];
-      const targetX = startX + index * spacing;
-      const targetZ = 0;
-
-      // Determine highlights
-      const activePointers = pointers[index] || [];
-      const isPointed = activePointers.length > 0;
-      const prevVal = prevVariables[listKey]?.[index];
-      const wasChanged = prevVal !== undefined && prevVal !== val;
-
-      let targetMat = baseMaterial;
-      if (isPointed) {
-        targetMat = actionType === 'SWAP' ? swapMaterial : compareMaterial;
-      } else if (wasChanged) {
-        targetMat = changedMaterial;
-      }
-
-      // Height of cubes is constant 0.7
-      let targetY = 0.35; // Default sitting on grid
-      if (isPointed) {
-        targetY = 0.95; // Float high (0.6 units up)
-      } else if (wasChanged) {
-        targetY = 0.65; // Float slightly (0.3 units up)
-      }
-
-      let meshInfo = meshesRef.current[id];
-      if (!meshInfo) {
-        // Create cube box mesh
-        const geo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
-        const mesh = new THREE.Mesh(geo, baseMaterial.clone());
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.position.set(targetX, -5, targetZ); // slide up from bottom
-        mesh.userData = { id, index, value: val };
-
-        // Create glowing wireframe child helper
-        const outlineGeo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
-        const outlineMat = new THREE.MeshBasicMaterial({
-          color: 0xffffff,
-          wireframe: true,
-          transparent: true,
-          opacity: 0.0,
-          depthWrite: false
-        });
-        const outlineMesh = new THREE.Mesh(outlineGeo, outlineMat);
-        outlineMesh.scale.set(1.15, 1.15, 1.15);
-        mesh.add(outlineMesh);
-        mesh.userData.outline = outlineMesh;
-
-        visualizerGroup.add(mesh);
-
-        meshInfo = {
-          mesh,
-          targetX,
-          targetY,
-          targetZ,
-          targetMat,
-          value: val,
-          isPointed,
-          wasChanged,
-          targetOutlineOpacity: (isPointed || wasChanged) ? 0.85 : 0.0,
-          targetOutlineColor: isPointed ? (actionType === 'SWAP' ? 0xef4444 : 0x10b981) : 0xf59e0b
-        };
-        meshesRef.current[id] = meshInfo;
-      } else {
-        // Update values
-        meshInfo.targetX = targetX;
-        meshInfo.targetY = targetY;
-        meshInfo.targetMat = targetMat;
-        meshInfo.value = val;
-        meshInfo.isPointed = isPointed;
-        meshInfo.wasChanged = wasChanged;
-        meshInfo.targetOutlineOpacity = (isPointed || wasChanged) ? 0.85 : 0.0;
-        meshInfo.targetOutlineColor = isPointed ? (actionType === 'SWAP' ? 0xef4444 : 0x10b981) : 0xf59e0b;
+      // Auto-frame camera based on array length and aspect ratio
+      if (cameraRef.current && containerRef.current) {
+        const w = containerRef.current.clientWidth || 600;
+        const h = containerRef.current.clientHeight || 280;
+        const A = w / h;
+        const arrayWidth = (listVal.length - 1) * spacing + 1.0;
+        const fovRad = (cameraRef.current.fov * Math.PI) / 180;
+        const halfFovHeight = Math.tan(fovRad / 2);
         
-        // Keep mesh userData updated
-        meshInfo.mesh.userData.index = index;
-        meshInfo.mesh.userData.value = val;
-      }
-    });
-
-    // Remove outdated meshes
-    Object.keys(meshesRef.current).forEach((id) => {
-      if (!activeMeshIds.has(id)) {
-        const meshInfo = meshesRef.current[id];
-        visualizerGroup.remove(meshInfo.mesh);
-        meshInfo.mesh.geometry.dispose();
-        meshInfo.mesh.material.dispose();
-        delete meshesRef.current[id];
-      }
-    });
-
-    // 3. Render 3D Connector Arch/Tube for COMPARE or SWAP operations
-    // Clear old connectors
-    while(connectorGroup.children.length > 0) {
-      const child = connectorGroup.children[0];
-      connectorGroup.remove(child);
-      child.geometry.dispose();
-      child.material.dispose();
-    }
-
-    const activeIndices = Object.keys(pointers).map(Number).sort((a, b) => a - b);
-    if (activeIndices.length >= 2 && (actionType === 'COMPARE' || actionType === 'SWAP')) {
-      const idx1 = activeIndices[0];
-      const idx2 = activeIndices[activeIndices.length - 1];
-
-      // Get mesh info
-      const id1 = ids[idx1];
-      const id2 = ids[idx2];
-      const m1 = meshesRef.current[id1];
-      const m2 = meshesRef.current[id2];
-
-      if (m1 && m2) {
-        const x1 = startX + idx1 * spacing;
-        const x2 = startX + idx2 * spacing;
-        // Y starts at top of cube (center targetY + 0.35 half-height)
-        const y1 = m1.targetY + 0.35;
-        const y2 = m2.targetY + 0.35;
-
-        const start = new THREE.Vector3(x1, y1 + 0.1, 0);
-        const end = new THREE.Vector3(x2, y2 + 0.1, 0);
+        const requiredDistByWidth = (arrayWidth / 2) / (A * halfFovHeight);
+        const requiredDistByHeight = 2.0 / halfFovHeight;
+        const targetDist = Math.max(6.5, requiredDistByWidth + 2.0, requiredDistByHeight);
         
-        // Draw elegant curve arching upwards
-        const midX = (x1 + x2) / 2;
-        const midY = Math.max(y1, y2) + 1.2 + Math.abs(x1 - x2) * 0.15;
-        const control = new THREE.Vector3(midX, midY, 0);
+        // Fixed cinematic angle: looking slightly down at the array
+        cameraRef.current.position.set(0, targetDist * 0.52, targetDist * 0.85);
+        cameraRef.current.lookAt(0, 0.1, 0);
+        if (controlsRef.current) {
+          controlsRef.current.target.set(0, 0.1, 0);
+        }
+      }
 
-        const path = new THREE.QuadraticBezierCurve3(start, control, end);
-        const tubeGeo = new THREE.TubeGeometry(path, 25, 0.035, 8, false);
-        
-        const connectorColor = actionType === 'SWAP' ? 0xef4444 : 0x10b981;
-        const tubeMat = new THREE.MeshStandardMaterial({
-          color: connectorColor,
-          emissive: connectorColor,
-          emissiveIntensity: 0.35,
-          roughness: 0.2
-        });
+      const activeMeshIds = new Set(ids);
 
-        const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
-        connectorGroup.add(tubeMesh);
+      // Sync meshes
+      ids.forEach((id, index) => {
+        const val = listVal[index];
+        const targetX = startX + index * spacing;
+        const targetZ = 0;
+
+        // Determine highlights
+        const activePointers = pointers[index] || [];
+        const isPointed = activePointers.length > 0;
+        const prevVal = prevVariables[listKey]?.[index];
+        const wasChanged = prevVal !== undefined && prevVal !== val;
+
+        let targetMat = baseMaterial;
+        if (isPointed) {
+          targetMat = actionType === 'SWAP' ? swapMaterial : compareMaterial;
+        } else if (wasChanged) {
+          targetMat = changedMaterial;
+        }
+
+        // Height of cubes is constant 0.7
+        let targetY = 0.35; // Default sitting on grid
+        if (isPointed) {
+          targetY = 0.95; // Float high (0.6 units up)
+        } else if (wasChanged) {
+          targetY = 0.65; // Float slightly (0.3 units up)
+        }
+
+        let meshInfo = meshesRef.current[id];
+        if (!meshInfo) {
+          // Create cube box mesh
+          const geo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
+          const mesh = new THREE.Mesh(geo, baseMaterial.clone());
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.position.set(targetX, -5, targetZ); // slide up from bottom
+          mesh.userData = { id, index, value: val };
+
+          // Create glowing wireframe child helper
+          const outlineGeo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
+          const outlineMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.0,
+            depthWrite: false
+          });
+          const outlineMesh = new THREE.Mesh(outlineGeo, outlineMat);
+          outlineMesh.scale.set(1.15, 1.15, 1.15);
+          mesh.add(outlineMesh);
+          mesh.userData.outline = outlineMesh;
+
+          visualizerGroup.add(mesh);
+
+          meshInfo = {
+            mesh,
+            targetX,
+            targetY,
+            targetZ,
+            targetMat,
+            value: val,
+            isPointed,
+            wasChanged,
+            targetOutlineOpacity: (isPointed || wasChanged) ? 0.85 : 0.0,
+            targetOutlineColor: isPointed ? (actionType === 'SWAP' ? 0xef4444 : 0x10b981) : 0xf59e0b
+          };
+          meshesRef.current[id] = meshInfo;
+        } else {
+          // Update values
+          meshInfo.targetX = targetX;
+          meshInfo.targetY = targetY;
+          meshInfo.targetMat = targetMat;
+          meshInfo.value = val;
+          meshInfo.isPointed = isPointed;
+          meshInfo.wasChanged = wasChanged;
+          meshInfo.targetOutlineOpacity = (isPointed || wasChanged) ? 0.85 : 0.0;
+          meshInfo.targetOutlineColor = isPointed ? (actionType === 'SWAP' ? 0xef4444 : 0x10b981) : 0xf59e0b;
+          
+          // Keep mesh userData updated
+          meshInfo.mesh.userData.index = index;
+          meshInfo.mesh.userData.value = val;
+        }
+      });
+
+      // Remove outdated meshes
+      Object.keys(meshesRef.current).forEach((id) => {
+        if (id.startsWith('el-') && !activeMeshIds.has(id)) {
+          const meshInfo = meshesRef.current[id];
+          visualizerGroup.remove(meshInfo.mesh);
+          meshInfo.mesh.geometry.dispose();
+          meshInfo.mesh.material.dispose();
+          delete meshesRef.current[id];
+        }
+      });
+
+      // Render 3D Connector Arch/Tube for COMPARE or SWAP operations
+      while(connectorGroup.children.length > 0) {
+        const child = connectorGroup.children[0];
+        connectorGroup.remove(child);
+        child.geometry.dispose();
+        child.material.dispose();
+      }
+
+      const activeIndices = Object.keys(pointers).map(Number).sort((a, b) => a - b);
+      if (activeIndices.length >= 2 && (actionType === 'COMPARE' || actionType === 'SWAP')) {
+        const idx1 = activeIndices[0];
+        const idx2 = activeIndices[activeIndices.length - 1];
+
+        // Get mesh info
+        const id1 = ids[idx1];
+        const id2 = ids[idx2];
+        const m1 = meshesRef.current[id1];
+        const m2 = meshesRef.current[id2];
+
+        if (m1 && m2) {
+          const x1 = startX + idx1 * spacing;
+          const x2 = startX + idx2 * spacing;
+          const y1 = m1.targetY + 0.35;
+          const y2 = m2.targetY + 0.35;
+
+          const start = new THREE.Vector3(x1, y1 + 0.1, 0);
+          const end = new THREE.Vector3(x2, y2 + 0.1, 0);
+          
+          const midX = (x1 + x2) / 2;
+          const midY = Math.max(y1, y2) + 1.2 + Math.abs(x1 - x2) * 0.15;
+          const control = new THREE.Vector3(midX, midY, 0);
+
+          const path = new THREE.QuadraticBezierCurve3(start, control, end);
+          const tubeGeo = new THREE.TubeGeometry(path, 25, 0.035, 8, false);
+          
+          const connectorColor = actionType === 'SWAP' ? 0xef4444 : 0x10b981;
+          const tubeMat = new THREE.MeshStandardMaterial({
+            color: connectorColor,
+            emissive: connectorColor,
+            emissiveIntensity: 0.35,
+            roughness: 0.2
+          });
+
+          const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+          connectorGroup.add(tubeMesh);
+        }
+      }
+    } else {
+      // Variables & Output Mode (No array present)
+      // 1. Clean up array meshes
+      Object.keys(meshesRef.current).forEach((id) => {
+        if (id.startsWith('el-')) {
+          const meshInfo = meshesRef.current[id];
+          visualizerGroup.remove(meshInfo.mesh);
+          meshInfo.mesh.geometry.dispose();
+          meshInfo.mesh.material.dispose();
+          delete meshesRef.current[id];
+        }
+      });
+
+      // Clear connectors
+      while(connectorGroup.children.length > 0) {
+        const child = connectorGroup.children[0];
+        connectorGroup.remove(child);
+        child.geometry.dispose();
+        child.material.dispose();
+      }
+
+      // 2. Identify variables to visualize
+      const scalarVars = scalarKeys
+        .filter(k => !k.startsWith('__') && k !== 'step_counter')
+        .map(k => ({ name: k, value: variables[k] }));
+
+      const prevVars = prevVariables || {};
+      const activeVarIds = new Set();
+      const varSpacing = 1.4;
+
+      // Sync Variable Pedestals & Cubes
+      scalarVars.forEach((v, index) => {
+        const id = `var-${v.name}`;
+        const pedestalId = `pedestal-${v.name}`;
+        activeVarIds.add(id);
+        activeVarIds.add(pedestalId);
+
+        // Position variables on the right side of the scene
+        const targetX = 0.6 + index * varSpacing;
+        const targetZ = 0.2;
+
+        const prevVal = prevVars[v.name];
+        const wasChanged = prevVal !== undefined && prevVal !== v.value;
+        const targetY = wasChanged ? 0.8 : 0.3; // float if changed
+
+        // A. Pedestal cylinder
+        let pedestalInfo = meshesRef.current[pedestalId];
+        if (!pedestalInfo) {
+          const pedGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.05, 16);
+          const pedMat = new THREE.MeshPhysicalMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.1 });
+          const pedMesh = new THREE.Mesh(pedGeo, pedMat);
+          pedMesh.position.set(targetX, 0.025, targetZ);
+          visualizerGroup.add(pedMesh);
+          pedestalInfo = { mesh: pedMesh, targetX, targetY: 0.025, targetZ };
+          meshesRef.current[pedestalId] = pedestalInfo;
+        } else {
+          pedestalInfo.mesh.position.set(targetX, 0.025, targetZ);
+        }
+
+        // B. Value block (cube)
+        let meshInfo = meshesRef.current[id];
+        const valStr = String(v.value);
+
+        if (!meshInfo) {
+          const geo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+          const texture = createTextTexture(valStr, '#F8FAFC', '#1e1b4b', 40, 128, 128);
+          const textMat = new THREE.MeshBasicMaterial({ map: texture });
+          const sideMat = new THREE.MeshPhysicalMaterial({ color: 0x6366f1, roughness: 0.15, metalness: 0.4, clearcoat: 1.0 });
+          const materials = [sideMat, sideMat, sideMat, sideMat, textMat, sideMat];
+          const mesh = new THREE.Mesh(geo, materials);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.position.set(targetX, -5, targetZ); // slide up from bottom
+          mesh.userData = { id, varName: v.name, value: v.value };
+
+          // Glowing outline Helper
+          const outlineGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+          const outlineMat = new THREE.MeshBasicMaterial({
+            color: 0xf59e0b,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.0,
+            depthWrite: false
+          });
+          const outlineMesh = new THREE.Mesh(outlineGeo, outlineMat);
+          outlineMesh.scale.set(1.15, 1.15, 1.15);
+          mesh.add(outlineMesh);
+          mesh.userData.outline = outlineMesh;
+
+          visualizerGroup.add(mesh);
+
+          meshInfo = {
+            mesh,
+            targetX,
+            targetY,
+            targetZ,
+            targetMat: sideMat,
+            value: v.value,
+            wasChanged,
+            targetOutlineOpacity: wasChanged ? 0.85 : 0.0,
+            targetOutlineColor: 0xf59e0b,
+            texture
+          };
+          meshesRef.current[id] = meshInfo;
+        } else {
+          // Update texture if value updated
+          if (meshInfo.value !== v.value) {
+            if (meshInfo.texture) meshInfo.texture.dispose();
+            const newTexture = createTextTexture(valStr, '#F8FAFC', '#1e1b4b', 40, 128, 128);
+            meshInfo.mesh.material[4].map = newTexture;
+            meshInfo.mesh.material[4].needsUpdate = true;
+            meshInfo.texture = newTexture;
+            meshInfo.value = v.value;
+          }
+          meshInfo.targetX = targetX;
+          meshInfo.targetY = targetY;
+          meshInfo.wasChanged = wasChanged;
+          meshInfo.targetOutlineOpacity = wasChanged ? 0.85 : 0.0;
+        }
+      });
+
+      // Sync Stdout Stack (Left side, X = -1.8)
+      const visibleLines = stdout.split('\n').filter(l => l.length > 0).slice(-8);
+      const activeStdoutIds = new Set();
+
+      // Base Console Platform
+      const consolePlatformId = 'console-platform';
+      activeStdoutIds.add(consolePlatformId);
+      let consolePlatformInfo = meshesRef.current[consolePlatformId];
+      if (!consolePlatformInfo) {
+        const platGeo = new THREE.BoxGeometry(2.0, 0.03, 1.2);
+        const platMat = new THREE.MeshPhysicalMaterial({ color: 0x0f172a, roughness: 0.4, metalness: 0.2 });
+        const platMesh = new THREE.Mesh(platGeo, platMat);
+        platMesh.position.set(-1.8, 0.015, 0.0);
+        visualizerGroup.add(platMesh);
+        consolePlatformInfo = { mesh: platMesh, targetX: -1.8, targetY: 0.015, targetZ: 0.0 };
+        meshesRef.current[consolePlatformId] = consolePlatformInfo;
+      }
+
+      visibleLines.forEach((lineText, idx) => {
+        const id = `stdout-${idx}`;
+        activeStdoutIds.add(id);
+
+        const targetX = -1.8;
+        const targetZ = 0.0;
+        const targetY = 0.1 + idx * 0.22; // stack upwards
+
+        let meshInfo = meshesRef.current[id];
+        if (!meshInfo) {
+          const geo = new THREE.BoxGeometry(1.8, 0.16, 0.8);
+          const texture = createTextTexture(lineText, '#F8FAFC', '#0369a1', 32, 256, 64);
+          const textMat = new THREE.MeshBasicMaterial({ map: texture });
+          const sideMat = new THREE.MeshPhysicalMaterial({
+            color: 0x0284c7,
+            roughness: 0.15,
+            metalness: 0.2,
+            transparent: true,
+            opacity: 0.85
+          });
+          const materials = [sideMat, sideMat, sideMat, sideMat, textMat, sideMat];
+          const mesh = new THREE.Mesh(geo, materials);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          // Drop from sky
+          mesh.position.set(targetX, 3.5, targetZ);
+          mesh.userData = { id, index: idx, value: lineText };
+
+          visualizerGroup.add(mesh);
+
+          meshInfo = {
+            mesh,
+            targetX,
+            targetY,
+            targetZ,
+            targetMat: sideMat,
+            value: lineText,
+            texture
+          };
+          meshesRef.current[id] = meshInfo;
+        } else {
+          // If printed text at this stack level changed, update texture
+          if (meshInfo.value !== lineText) {
+            if (meshInfo.texture) meshInfo.texture.dispose();
+            const newTexture = createTextTexture(lineText, '#F8FAFC', '#0369a1', 32, 256, 64);
+            meshInfo.mesh.material[4].map = newTexture;
+            meshInfo.mesh.material[4].needsUpdate = true;
+            meshInfo.texture = newTexture;
+            meshInfo.value = lineText;
+          }
+          meshInfo.targetX = targetX;
+          meshInfo.targetY = targetY;
+        }
+      });
+
+      // Clean up stale variable or stdout meshes
+      Object.keys(meshesRef.current).forEach((id) => {
+        if (id.startsWith('var-') || id.startsWith('pedestal-')) {
+          if (!activeVarIds.has(id)) {
+            const meshInfo = meshesRef.current[id];
+            visualizerGroup.remove(meshInfo.mesh);
+            meshInfo.mesh.geometry.dispose();
+            if (meshInfo.texture) meshInfo.texture.dispose();
+            if (Array.isArray(meshInfo.mesh.material)) {
+              meshInfo.mesh.material.forEach(m => m.dispose());
+            } else {
+              meshInfo.mesh.material.dispose();
+            }
+            delete meshesRef.current[id];
+          }
+        } else if (id.startsWith('stdout-') || id === 'console-platform') {
+          if (!activeStdoutIds.has(id)) {
+            const meshInfo = meshesRef.current[id];
+            visualizerGroup.remove(meshInfo.mesh);
+            meshInfo.mesh.geometry.dispose();
+            if (meshInfo.texture) meshInfo.texture.dispose();
+            if (Array.isArray(meshInfo.mesh.material)) {
+              meshInfo.mesh.material.forEach(m => m.dispose());
+            } else {
+              meshInfo.mesh.material.dispose();
+            }
+            delete meshesRef.current[id];
+          }
+        }
+      });
+
+      // Auto-frame camera for Variables Mode (view variables and stdout side by side)
+      if (cameraRef.current && containerRef.current) {
+        cameraRef.current.position.set(0, 4.0, 7.0);
+        cameraRef.current.lookAt(0, 0.2, 0);
+        if (controlsRef.current) {
+          controlsRef.current.target.set(0, 0.2, 0);
+        }
       }
     }
 
@@ -535,7 +816,7 @@ export default function CodeVisualizer3D({
       swapMaterial.dispose();
       changedMaterial.dispose();
     };
-  }, [listKey, listVal, variables, actionType]);
+  }, [listKey, listVal, variables, prevVariables, scalarKeys, actionType, stdout]);
 
   return (
     <div
@@ -556,7 +837,8 @@ export default function CodeVisualizer3D({
 
       {/* Floating 2D HTML Labels Overlay (Positions managed directly by WebGL loop) */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}>
-        {elementIdsRef.current.map((id, index) => {
+        {/* List Mode Labels */}
+        {listKey && listVal.length > 0 && elementIdsRef.current.map((id, index) => {
           const val = listVal[index];
           const activePointers = pointersRef.current[index] || [];
           return (
@@ -612,6 +894,42 @@ export default function CodeVisualizer3D({
                   ))}
                 </div>
               )}
+            </div>
+          );
+        })}
+
+        {/* Variables Mode Labels (Name tags floating above pedestals) */}
+        {(!listKey || listVal.length === 0) && stackVars.filter(v => v.type !== 'dict').map((v) => {
+          const id = `var-${v.key}`;
+          return (
+            <div
+              key={id}
+              id={`label-${id}`}
+              style={{
+                position: 'absolute',
+                display: 'none',
+                transform: 'translate(-50%, -100%)',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              <div
+                style={{
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  color: '#38BDF8',
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  padding: '2px 7px',
+                  borderRadius: 5,
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  backdropFilter: 'blur(4px)'
+                }}
+              >
+                {v.key}
+              </div>
             </div>
           );
         })}
