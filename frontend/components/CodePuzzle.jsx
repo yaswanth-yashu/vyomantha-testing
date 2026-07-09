@@ -15,6 +15,7 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { T } from '@/lib/lms-data';
+import CodeVisualizer3D from './CodeVisualizer3D';
 
 import { StateField, StateEffect } from "@codemirror/state";
 import { EditorView, Decoration, WidgetType } from "@codemirror/view";
@@ -298,6 +299,7 @@ export default function CodePuzzle() {
   const [isTracing, setIsTracing] = useState(false);
   const [traceError, setTraceError] = useState(null);
   const [playSpeed, setPlaySpeed] = useState(1500); // 1500ms, 1000ms, 500ms
+  const [visualizerMode, setVisualizerMode] = useState('2D'); // '2D' | '3D'
 
   // Terminal refs & resize layouts
   const terminalElRef = useRef(null);
@@ -876,29 +878,219 @@ export default function CodePuzzle() {
     );
   };
 
+  const getTraceStepDetails = () => {
+    if (!traceData || !traceData[currentStep]) return null;
+    const { variables = {}, error, line, stdout = "" } = traceData[currentStep];
+    const keys = Object.keys(variables);
+    const prevStep = currentStep > 0 ? traceData[currentStep - 1] : null;
+    const prevVariables = prevStep ? prevStep.variables : {};
+
+    const listKey = keys.find(k => Array.isArray(variables[k]) && !k.startsWith('__'));
+    const listVal = listKey ? variables[listKey] : [];
+    
+    // Find pointer variables pointing to indices in this list
+    const pointers = {};
+    if (listKey) {
+      Object.entries(variables).forEach(([k, v]) => {
+        if (typeof v === 'number' && v >= 0 && v < listVal.length && !k.startsWith('__') && k !== 'step_counter') {
+          if (!pointers[v]) pointers[v] = [];
+          pointers[v].push(k);
+        }
+      });
+    }
+
+    const prevListVal = prevVariables[listKey];
+    let actionType = "STEP";
+    let swapMessage = "";
+    
+    const changedIndices = [];
+    if (listKey && prevListVal && JSON.stringify(prevListVal) !== JSON.stringify(listVal)) {
+      listVal.forEach((item, idx) => {
+        if (prevListVal[idx] !== item) {
+          changedIndices.push(idx);
+        }
+      });
+      if (changedIndices.length === 2) {
+        actionType = "SWAP";
+        swapMessage = `Switch ${listVal[changedIndices[0]]} ↔ ${listVal[changedIndices[1]]}`;
+      } else if (changedIndices.length > 0) {
+        actionType = "ASSIGN";
+        swapMessage = `Update [${changedIndices.join(', ')}]`;
+      }
+    } else if (listKey) {
+      const activePointers = Object.entries(pointers).flatMap(([idx, names]) => names);
+      if (activePointers.length >= 2) {
+        actionType = "COMPARE";
+        swapMessage = `Compare ${activePointers.join(' ↔ ')}`;
+      }
+    }
+
+    const scalarKeys = keys.filter(k => {
+      const val = variables[k];
+      return !Array.isArray(val) && (typeof val !== 'object' || val === null);
+    });
+
+    const dictKeys = keys.filter(k => {
+      const val = variables[k];
+      return typeof val === 'object' && val !== null && !Array.isArray(val);
+    });
+
+    // Active line info
+    const lines = code.split('\n');
+    const activeLineText = lines[line - 1]?.trim() || '';
+    
+    let lineActionType = "EXECUTE";
+    if (activeLineText.startsWith('for ') || activeLineText.startsWith('while ')) {
+      lineActionType = "LOOP EVALUATION";
+    } else if (activeLineText.startsWith('if ') || activeLineText.startsWith('elif ') || activeLineText.startsWith('else:')) {
+      lineActionType = "BRANCH DECISION";
+    } else if (activeLineText.includes('print(')) {
+      lineActionType = "PRINT OUTPUT";
+    } else if (activeLineText.includes('=')) {
+      lineActionType = "VARIABLE ASSIGN";
+    } else if (activeLineText.startsWith('def ')) {
+      lineActionType = "FUNCTION DECLARE";
+    } else if (activeLineText.startsWith('return ')) {
+      lineActionType = "FUNCTION RETURN";
+    }
+
+    return {
+      variables,
+      error,
+      line,
+      stdout,
+      listKey,
+      listVal,
+      scalarKeys,
+      dictKeys,
+      actionType,
+      swapMessage,
+      activeLineText,
+      lineActionType
+    };
+  };
+
+  const render3DVisualizer = () => {
+    const details = getTraceStepDetails();
+    if (!details) return null;
+
+    const {
+      variables,
+      error,
+      line,
+      stdout,
+      listKey,
+      listVal,
+      scalarKeys,
+      dictKeys,
+      actionType,
+      swapMessage,
+      activeLineText,
+      lineActionType
+    } = details;
+
+    if (error) {
+      return (
+        <div style={{ color: '#F55B6B', background: 'rgba(245,91,107,0.08)', border: '1px solid rgba(245,91,107,0.3)', padding: 12, borderRadius: 8, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6, margin: 14 }}>
+          <strong style={{ display: 'block' }}>⚠️ Python Runtime Error</strong>
+          <span style={{ fontFamily: 'monospace' }}>{error}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: 420, width: '100%', background: '#090d16', position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+        
+        {/* Floating Code Line HUD */}
+        {activeLineText && (
+          <div style={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            zIndex: 30,
+            background: 'rgba(10, 15, 30, 0.85)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 12,
+            padding: '10px 14px',
+            maxWidth: '60%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 9.5, color: '#8892B0', fontWeight: 800, letterSpacing: '0.05em' }}>LINE {line}</span>
+              <span style={{
+                fontSize: 9,
+                color: lineActionType === 'VARIABLE ASSIGN' ? '#FBBF24' :
+                       lineActionType === 'LOOP EVALUATION' ? '#38BDF8' :
+                       lineActionType === 'BRANCH DECISION' ? '#A78BFA' :
+                       lineActionType === 'PRINT OUTPUT' ? '#34D399' : '#F8FAFC',
+                background: lineActionType === 'VARIABLE ASSIGN' ? 'rgba(251, 191, 36, 0.15)' :
+                            lineActionType === 'LOOP EVALUATION' ? 'rgba(56, 189, 248, 0.15)' :
+                            lineActionType === 'BRANCH DECISION' ? 'rgba(167, 139, 250, 0.15)' :
+                            lineActionType === 'PRINT OUTPUT' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255, 255, 255, 0.1)',
+                padding: '2px 6px',
+                borderRadius: 5,
+                fontWeight: 800,
+                letterSpacing: '0.04em'
+              }}>
+                {lineActionType}
+              </span>
+            </div>
+            <div style={{
+              fontFamily: 'monospace',
+              fontSize: 12,
+              color: '#F8FAFC',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              padding: '6px 10px',
+              background: 'rgba(0, 0, 0, 0.4)',
+              borderRadius: 6,
+              borderLeft: `3px solid ${
+                lineActionType === 'VARIABLE ASSIGN' ? '#FBBF24' :
+                lineActionType === 'LOOP EVALUATION' ? '#38BDF8' :
+                lineActionType === 'BRANCH DECISION' ? '#A78BFA' :
+                lineActionType === 'PRINT OUTPUT' ? '#34D399' : '#6366F1'
+              }`
+            }}>
+              {activeLineText}
+            </div>
+            {swapMessage && (
+              <div style={{
+                fontSize: 10.5,
+                color: actionType === 'SWAP' ? '#F87171' : '#34D399',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                marginTop: 6,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4
+              }}>
+                <span>⚡</span> {swapMessage}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3D WebGL Scene */}
+        <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
+          <CodeVisualizer3D
+            listKey={listKey}
+            listVal={listVal}
+            variables={variables}
+            prevVariables={currentStep > 0 ? traceData[currentStep - 1].variables : {}}
+            scalarKeys={scalarKeys}
+            dictKeys={dictKeys}
+            actionType={actionType}
+            swapMessage={swapMessage}
+            stdout={stdout}
+          />
+        </div>
+      </div>
+    );
+  };
+
   // Render Visualizer Variables
-  const renderVisualizerVariables = () => {
-    if (traceError) {
-      return (
-        <div style={{ padding: 12, background: 'rgba(245, 91, 107, 0.08)', border: '1px solid rgba(245, 91, 107, 0.2)', borderRadius: 8, color: '#F55B6B', fontSize: 12 }}>
-          <strong>⚠️ Visualizer Error</strong>
-          <div style={{ fontFamily: 'monospace', marginTop: 4 }}>{traceError}</div>
-        </div>
-      );
-    }
-
-    if (!traceData || !traceData[currentStep]) {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '40px 10px', textAlign: 'center', color: '#647298', gap: 10 }}>
-          <Code size={32} color="#5B8CF8" />
-          <span style={{ fontSize: 13, fontWeight: 500 }}>No active trace data.</span>
-          <span style={{ fontSize: 11.5, maxWidth: 260 }}>
-            Click the <strong>Visualize Code</strong> button below the editor to run and record a trace of your code.
-          </span>
-        </div>
-      );
-    }
-
+  const render2DVisualizer = () => {
     const { line, variables } = traceData[currentStep];
     const keys = Object.keys(variables || {});
     const prevStep = currentStep > 0 ? traceData[currentStep - 1] : null;
@@ -987,6 +1179,32 @@ export default function CodePuzzle() {
         )}
       </div>
     );
+  };
+
+  // Render Visualizer Variables
+  const renderVisualizerVariables = () => {
+    if (traceError) {
+      return (
+        <div style={{ padding: 12, background: 'rgba(245, 91, 107, 0.08)', border: '1px solid rgba(245, 91, 107, 0.2)', borderRadius: 8, color: '#F55B6B', fontSize: 12 }}>
+          <strong>⚠️ Visualizer Error</strong>
+          <div style={{ fontFamily: 'monospace', marginTop: 4 }}>{traceError}</div>
+        </div>
+      );
+    }
+
+    if (!traceData || !traceData[currentStep]) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '40px 10px', textAlign: 'center', color: '#647298', gap: 10 }}>
+          <Code size={32} color="#5B8CF8" />
+          <span style={{ fontSize: 13, fontWeight: 500 }}>No active trace data.</span>
+          <span style={{ fontSize: 11.5, maxWidth: 260 }}>
+            Click the <strong>Visualize Code</strong> button below the editor to run and record a trace of your code.
+          </span>
+        </div>
+      );
+    }
+
+    return visualizerMode === '3D' ? render3DVisualizer() : render2DVisualizer();
   };
 
   return (
@@ -1725,6 +1943,50 @@ export default function CodePuzzle() {
                             >
                               {playSpeed === 1500 ? '1.0x' : playSpeed === 1000 ? '1.5x' : '2.0x'}
                             </button>
+                            
+                            {/* 3D/2D Visualizer Mode Toggle */}
+                            <div style={{
+                              display: 'flex',
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: 4,
+                              padding: 2,
+                              gap: 2,
+                              alignItems: 'center'
+                            }}>
+                              <button
+                                onClick={() => setVisualizerMode('3D')}
+                                style={{
+                                  background: visualizerMode === '3D' ? '#F5A95B' : 'transparent',
+                                  color: visualizerMode === '3D' ? '#000000' : '#8892B0',
+                                  border: 'none',
+                                  padding: '3px 8px',
+                                  borderRadius: 3,
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s'
+                                }}
+                              >
+                                3D
+                              </button>
+                              <button
+                                onClick={() => setVisualizerMode('2D')}
+                                style={{
+                                  background: visualizerMode === '2D' ? '#F5A95B' : 'transparent',
+                                  color: visualizerMode === '2D' ? '#000000' : '#8892B0',
+                                  border: 'none',
+                                  padding: '3px 8px',
+                                  borderRadius: 3,
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s'
+                                }}
+                              >
+                                2D
+                              </button>
+                            </div>
                             
                             <div style={{ display: 'flex', gap: 3 }}>
                               <button
